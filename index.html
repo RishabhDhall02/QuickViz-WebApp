@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>QuickViz</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>QuickViz</h1>
+      <p>Auto-charts. Instant insights. Visualize your data effortlessly.</p>
+    </header>
+
+    <div class="parallax"></div>
+    <div id="main-data">
+      <section id="Visualizations">
+        <h2>Visualizations</h2>
+        <h3>Select Chart Type</h3>
+        <select id="chart-type">
+          <option value="bar">Bar Chart</option>
+          <option value="line">Line Chart</option>
+          <option value="scatter">Scatter Plot</option>
+          <option value="pie">Pie Chart</option>
+        </select>
+        <h3>Chart Title:</h3>
+        <div class="chart-title-input-container">
+          <input type="text" id="chartTitle" placeholder="Enter chart title" />
+        </div>
+        <button id="set-title-btn">Set Title</button>
+        <button id="reset-title-btn">Reset</button>
+        <div class="error-container">
+          <span class="error-message" id="chart-title-error"></span>
+        </div>
+        <h3>X-Axis Title:</h3>
+        <div class="axis-title-input-container">
+          <input
+            type="text"
+            id="x-axis-title"
+            placeholder="Enter X-Axis Title"
+          />
+        </div>
+        <button id="set-x-title">Set Title</button>
+        <button id="reset-x-title">Reset</button>
+        <div class="error-container">
+          <span class="error-message" id="x-title-error"></span>
+        </div>
+        <h3>Y-Axis Title:</h3>
+        <div class="axis-title-input-container">
+          <input
+            type="text"
+            id="y-axis-title"
+            placeholder="Enter Y-Axis Title"
+          />
+        </div>
+        <button id="set-y-title">Set Title</button>
+        <button id="reset-y-title">Reset</button>
+        <div class="error-container">
+          <span class="error-message" id="y-title-error"></span>
+        </div>
+      </section>
+    </div>
+    <!-- Main Layout with Two Columns -->
+    <div id="main-layout">
+      <!-- Sidebar for Controls -->
+      <div id="controls">
+        <section id="file-upload">
+          <label id="file-input-wrapper" for="file-input">Choose File</label>
+          <input type="file" id="file-input" accept=".csv,.json,.xlsx" />
+          <div id="file-info">
+            <div class="file-name">No file selected</div>
+            <div class="file-type"></div>
+          </div>
+          <button onclick="uploadFile()">Upload Dataset</button>
+          <div class="error-container">
+            <span class="error-message" id="file-upload-error"></span>
+            <span class="error-message" id="invalid-file-error"></span>
+          </div>
+        </section>
+        <section id="Dataset Preview">
+          <h2>Dataset Preview</h2>
+          <div id="summary"></div>
+          <table id="preview-table"></table>
+        </section>
+        <section id="Export Options">
+          <h2>Export Options</h2>
+          <button id="export-csv-btn">Export Chart Data as CSV</button>
+          <button id="export-image-btn">Export Chart as Image</button>
+        </section>
+        <section id="contact">
+          <h2>Contact the Creator</h2>
+          <button id="copy-email-btn">Email Me!</button>
+          <span id="copy-email-msg" class="hidden">Email copied!</span>
+        </section>
+      </div>
+
+      <!-- Main Content Area for Chart and Insights -->
+      <div id="main-content">
+        <div class="chart-container">
+          <canvas id="chart-container"></canvas>
+        </div>
+        <div class="statistic-container">
+          <label>Select Statistics:</label><br />
+
+          <input type="checkbox" name="statistic" value="mean" id="mean" />
+          <label class="checkbox-label" for="mean">Mean</label><br />
+
+          <input type="checkbox" name="statistic" value="median" id="median" />
+          <label class="checkbox-label" for="median">Median</label><br />
+
+          <input type="checkbox" name="statistic" value="mode" id="mode" />
+          <label class="checkbox-label" for="mode">Mode</label><br />
+
+          <input
+            type="checkbox"
+            name="statistic"
+            value="outlier"
+            id="outlier"
+          />
+          <label class="checkbox-label" for="outlier">Outlier</label><br />
+        </div>
+        <p id="dataset-description"></p>
+        <div id="summary-stats"></div>
+      </div>
+    </div>
+    <!-- Help Button -->
+    <button id="help-btn">Need Help?</button>
+
+    <!-- Popup Modal for Instructions -->
+    <div id="help-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>Instructions</h2>
+        <p>
+          Currently this site assumes the first column is a Categorical column
+          along with the first row being headers (<strong
+            >this will be adjusted in future updates</strong
+          >). To use this site, upload a dataset in CSV, JSON or XLSX format.
+          Upon uploading the dataset, the site will automatically generate the
+          most suitable chart based on your dataset and provide you with a brief
+          description to help you understand it quickly. You can also view
+          summary statistics like Mean, Median, Mode and Outliers, and customize
+          your chart's title and axis titles. Additionally, you can switch
+          between different chart types to explore alternative views of your
+          dataset. You can also export your dataset as a CSV and the chart as a
+          JPEG image.
+        </p>
+        <h4>Chart Restrictions (not directly tied to chart detection logic)</h4>
+        <ul>
+          <li>
+            <strong>Bar Chart:</strong> 1 categorical column + 1 or more numeric
+            columns. Best for comparisons.
+          </li>
+          <li>
+            <strong>Line Chart:</strong> 1 categorical column + 1 or more
+            numeric columns. Best for trends.
+          </li>
+          <li>
+            <strong>Scatter Plot:</strong> 2 numeric columns. Best for
+            relationships/distribution.
+          </li>
+          <li>
+            <strong>Pie Chart:</strong> 1 categorical column + 1 numeric column.
+            Limited to first 10 categories to avoid cluster.
+          </li>
+        </ul>
+      </div>
+    </div>
+    <script src="script.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+  </body>
+</html>
