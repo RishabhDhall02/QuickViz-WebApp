@@ -895,7 +895,7 @@ function generateChart(data) {
                         : categoricalColumns[0] || `${numericColumns[0]}`),
                     font: {
                       size: 12,
-                      family: "Barlow Regular",
+                      family: "Alata",
                     },
                   },
                 },
@@ -919,7 +919,7 @@ function generateChart(data) {
                         : "Values"),
                     font: {
                       size: 12,
-                      family: "Barlow Regular",
+                      family: "Alata",
                     },
                   },
                 },
@@ -932,7 +932,7 @@ function generateChart(data) {
             font: {
               size: 20,
               weight: "bold",
-              family: "Barlow Regular",
+              family: "Alata",
             },
           },
           legend: {

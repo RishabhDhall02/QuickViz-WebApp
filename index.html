@@ -9,15 +9,15 @@
   </head>
   <body>
     <header>
-      <h1>QuickViz</h1>
-      <p>Auto-charts. Instant insights. Visualize your data effortlessly.</p>
+      <h1>QUICKVIZ</h1>
+      <h5>Auto-charts. Instant insights. Visualize your data effortlessly.</h5>
     </header>
 
     <div class="parallax"></div>
     <div id="main-data">
       <section id="Visualizations">
         <h2>Visualizations</h2>
-        <h3>Select Chart Type</h3>
+        <h3>Select Chart Type:</h3>
         <select id="chart-type">
           <option value="bar">Bar Chart</option>
           <option value="line">Line Chart</option>
@@ -28,8 +28,8 @@
         <div class="chart-title-input-container">
           <input type="text" id="chartTitle" placeholder="Enter chart title" />
         </div>
-        <button id="set-title-btn">Set Title</button>
-        <button id="reset-title-btn">Reset</button>
+        <button id="set-title-btn">SET TITLE</button>
+        <button id="reset-title-btn">RESET</button>
         <div class="error-container">
           <span class="error-message" id="chart-title-error"></span>
         </div>
@@ -38,11 +38,11 @@
           <input
             type="text"
             id="x-axis-title"
-            placeholder="Enter X-Axis Title"
+            placeholder="Enter X-Axis title"
           />
         </div>
-        <button id="set-x-title">Set Title</button>
-        <button id="reset-x-title">Reset</button>
+        <button id="set-x-title">SET TITLE</button>
+        <button id="reset-x-title">RESET</button>
         <div class="error-container">
           <span class="error-message" id="x-title-error"></span>
         </div>
@@ -51,11 +51,11 @@
           <input
             type="text"
             id="y-axis-title"
-            placeholder="Enter Y-Axis Title"
+            placeholder="Enter Y-Axis title"
           />
         </div>
-        <button id="set-y-title">Set Title</button>
-        <button id="reset-y-title">Reset</button>
+        <button id="set-y-title">SET TITLE</button>
+        <button id="reset-y-title">RESET</button>
         <div class="error-container">
           <span class="error-message" id="y-title-error"></span>
         </div>
@@ -66,13 +66,13 @@
       <!-- Sidebar for Controls -->
       <div id="controls">
         <section id="file-upload">
-          <label id="file-input-wrapper" for="file-input">Choose File</label>
+          <label id="file-input-wrapper" for="file-input">CHOOSE FILE</label>
           <input type="file" id="file-input" accept=".csv,.json,.xlsx" />
           <div id="file-info">
             <div class="file-name">No file selected</div>
             <div class="file-type"></div>
           </div>
-          <button onclick="uploadFile()">Upload Dataset</button>
+          <button onclick="uploadFile()">UPLOAD DATASET</button>
           <div class="error-container">
             <span class="error-message" id="file-upload-error"></span>
             <span class="error-message" id="invalid-file-error"></span>
@@ -85,12 +85,12 @@
         </section>
         <section id="Export Options">
           <h2>Export Options</h2>
-          <button id="export-csv-btn">Export Chart Data as CSV</button>
-          <button id="export-image-btn">Export Chart as Image</button>
+          <button id="export-csv-btn">EXPORT DATA → CSV</button>
+          <button id="export-image-btn">EXPORT CHART → IMAGE</button>
         </section>
         <section id="contact">
-          <h2>Contact the Creator</h2>
-          <button id="copy-email-btn">Email Me!</button>
+          <h2>Contact Me!</h2>
+          <button id="copy-email-btn">EMAIL</button>
           <span id="copy-email-msg" class="hidden">Email copied!</span>
         </section>
       </div>
@@ -125,7 +125,7 @@
       </div>
     </div>
     <!-- Help Button -->
-    <button id="help-btn">Need Help?</button>
+    <button id="help-btn">NEED HELP?</button>
 
     <!-- Popup Modal for Instructions -->
     <div id="help-modal" class="modal">
