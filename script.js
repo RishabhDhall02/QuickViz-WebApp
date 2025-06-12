@@ -96,6 +96,36 @@ document
     }
   });
 
+const dropZone = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+
+dropZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragover");
+});
+
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+
+  const file = e.dataTransfer.files[0];
+  if (
+    file &&
+    (file.name.endsWith(".csv") ||
+      file.name.endsWith(".json") ||
+      file.name.endsWith(".xlsx"))
+  ) {
+    fileInput.files = e.dataTransfer.files; // update input so UI stays in sync
+    uploadFile(file);
+  } else {
+    showFileError("Please drop a valid .csv, .json, or .xlsx file.");
+  }
+});
+
 document
   .getElementById("copy-email-btn")
   .addEventListener("click", function () {
@@ -882,7 +912,7 @@ function generateChart(data) {
                     color: "black",
                     font: {
                       size: 12,
-                      family: "Barlow Regular",
+                      family: "Leelawadee",
                     },
                   },
                   display: true,
@@ -895,7 +925,7 @@ function generateChart(data) {
                         : categoricalColumns[0] || `${numericColumns[0]}`),
                     font: {
                       size: 12,
-                      family: "Alata",
+                      family: "Leelawadee",
                     },
                   },
                 },
@@ -904,7 +934,7 @@ function generateChart(data) {
                     color: "black",
                     font: {
                       size: 12,
-                      family: "Barlow Regular",
+                      family: "Leelawadee",
                     },
                   },
                   title: {
@@ -919,7 +949,7 @@ function generateChart(data) {
                         : "Values"),
                     font: {
                       size: 12,
-                      family: "Alata",
+                      family: "Leelawadee",
                     },
                   },
                 },
@@ -932,7 +962,7 @@ function generateChart(data) {
             font: {
               size: 20,
               weight: "bold",
-              family: "Alata",
+              family: "Leelawadee",
             },
           },
           legend: {
@@ -941,13 +971,13 @@ function generateChart(data) {
               color: "black",
               font: {
                 size: 12,
-                family: "Barlow Regular",
+                family: "Leelawadee",
               },
             },
           },
           tooltip: {
-            bodyFont: { size: 12, family: "Barlow" }, // Tooltip text font
-            titleFont: { size: 14, family: "Barlow", weight: "bold" }, // Tooltip title font
+            bodyFont: { size: 12, family: "Leelawadee" }, // Tooltip text font
+            titleFont: { size: 14, family: "Leelawadee", weight: "bold" }, // Tooltip title font
             callbacks: {
               label: function (tooltipItem) {
                 return `${tooltipItem.dataset.label}: ${tooltipItem.raw}`;

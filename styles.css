@@ -11,7 +11,7 @@ input[type="file"] {
 }
 
 body {
-  font-family: Barlow Regular;
+  font-family: Leelawadee;
   background: rgb(223, 222, 222);
   transition: background 0.3s ease;
   --text-color: #333;
@@ -355,12 +355,12 @@ button:focus {
   padding: 15px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin: 20px 0;
-  font-family: Barlow Regular, Barlow-Thin;
+  font-family: Leelawadee;
   color: #333;
 }
 
 #summary-stats p {
-  font-family: Barlow Regular, Barlow-Thin;
+  font-family: Leelawadee;
   font-size: 14px;
   margin: 5px 0;
 }
@@ -527,13 +527,54 @@ button:focus {
 }
 
 #chartTitle {
-  font-family: Barlow Regular, Barlow Thin;
+  font-family: Leelawadee;
 }
 
 #x-axis-title {
-  font-family: Barlow Regular, Barlow Thin;
+  font-family: Leelawadee;
 }
 
 #y-axis-title {
-  font-family: Barlow Regular, Barlow Thin;
+  font-family: Leelawadee;
+}
+
+#drop-zone {
+  border: 2px dashed #aaa;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 15px;
+  text-align: center;
+  color: #666;
+  font-family: Alata;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+#drop-zone.dragover {
+  background-color: #f0f0f0;
+  border-color: #4caf50;
+}
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 15px 0;
+  color: #888;
+  font-family: Alata;
+  font-size: 14px;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid #ccc;
+}
+
+.or-divider:not(:empty)::before {
+  margin-right: 0.75em;
+}
+
+.or-divider:not(:empty)::after {
+  margin-left: 0.75em;
 }
