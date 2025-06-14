@@ -38,9 +38,8 @@ A dynamic web application that automatically generates the most suitable data vi
 
 ## Future Plans
 
-- Drag-and-drop file upload
 - Annotation tools for charts
-- Selective data display
+- Selective data display adjustments
 - UI improvements for enhanced usability
 - Predictive analytics for forecasting trends
 
