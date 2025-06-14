@@ -12,7 +12,6 @@
       <h1>QUICKVIZ</h1>
       <h5>Auto-charts. Instant insights. Visualize your data effortlessly.</h5>
     </header>
-
     <div class="parallax"></div>
     <div id="main-data">
       <section id="Visualizations">
@@ -78,6 +77,20 @@
           <div class="error-container">
             <span class="error-message" id="file-upload-error"></span>
             <span class="error-message" id="invalid-file-error"></span>
+          </div>
+        </section>
+        <section id="column-select-section" style="display: none">
+          <h2>Select columns</h2>
+          <div id="column-checkboxes"></div>
+          <button
+            id="update-chart-btn"
+            onclick="updateChartWithSelectedColumns()"
+            disabled
+          >
+            CREATE CHART
+          </button>
+          <div class="error-container">
+            <span class="error-message" id="column-select-error"></span>
           </div>
         </section>
         <section id="Dataset Preview">

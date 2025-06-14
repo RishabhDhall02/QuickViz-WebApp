@@ -3,6 +3,8 @@ let parsedData = null; // Store parsed data
 let globalNumericColumns = [];
 let globalCategoricalColumns = [];
 let globalChartType = "";
+let originalParsedData = [];
+let selectedColumnsGlobal = [];
 
 // Function to trigger the brief disappear-reappear effect
 function triggerErrorEffect(errorElement, message) {
@@ -67,7 +69,12 @@ function uploadFile() {
   fileReader.onload = function (e) {
     const content = e.target.result;
     console.log("File content loaded:", content);
-    parseCSV(content);
+    const parsedData = parseCSV(content);
+
+    window.originalParsedData = parsedData;
+
+    const headers = parsedData[0] ? Object.keys(parsedData[0]) : [];
+    showColumnCheckboxes(headers);
   };
 
   fileReader.readAsText(file);
@@ -95,6 +102,55 @@ document
       fileInfo.querySelector(".file-type").textContent = "";
     }
   });
+
+function showColumnCheckboxes(columnNames) {
+  const section = document.getElementById("column-select-section");
+  const container = document.getElementById("column-checkboxes");
+  const updateBtn = document.getElementById("update-chart-btn");
+
+  container.innerHTML = "";
+
+  columnNames.forEach((col) => {
+    const label = document.createElement("label");
+    label.style.marginRight = "12px";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = "column";
+    checkbox.value = col;
+    checkbox.checked = true;
+
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(" " + col));
+    container.appendChild(label);
+  });
+
+  section.style.display = "block";
+  updateBtn.disabled = false;
+}
+
+function updateChartWithSelectedColumns() {
+  const selectedCols = Array.from(
+    document.querySelectorAll("input[name='column']:checked")
+  ).map((input) => input.value);
+
+  const errorDisplay = document.getElementById("column-select-error");
+
+  if (selectedCols.length < 2) {
+    errorDisplay.textContent = "Select at least 2 columns.";
+    return;
+  } else {
+    errorDisplay.textContent = "";
+  }
+
+  const filteredData = window.originalParsedData.map((row) => {
+    const filteredRow = {};
+    selectedCols.forEach((col) => (filteredRow[col] = row[col]));
+    return filteredRow;
+  });
+
+  generateChart(filteredData);
+}
 
 const dropZone = document.getElementById("drop-zone");
 const fileInput = document.getElementById("file-input");
@@ -201,8 +257,17 @@ function calculateOutliers(data) {
 }
 
 function parseCSV(content) {
+  // Reset custom titles on new dataset upload
+  xAxisTitle = null;
+  yAxisTitle = null;
+  chartTitle = "My Chart";
+
+  document.getElementById("x-axis-title").value = "";
+  document.getElementById("y-axis-title").value = "";
+  document.getElementById("chartTitle").value = "";
+
   console.log("Parsing CSV content...");
-  Papa.parse(content, {
+  const result = Papa.parse(content, {
     header: true,
     complete: function (results) {
       console.log("CSV parsed successfully: ", results);
@@ -216,13 +281,13 @@ function parseCSV(content) {
       displaySummary(parsedData); // Display the dataset summary
       displaySummaryStats(parsedData); // Display the calculated stats
       displayPreview(parsedData); // Display dataset preview
-      generateChart(parsedData); // Generate chart immediately after file upload
       generateDatasetDescription(parsedData); // Generate dataset's description
     },
     error: function (error) {
       console.error("Error parsing CSV: ", error); // Log errors if any
     },
   });
+  return result.data;
 }
 
 function displaySummary(data) {
@@ -622,7 +687,7 @@ document.getElementById("set-title-btn").addEventListener("click", function () {
       currentChart.destroy();
       generateChart(parsedData);
     }
-    errorText.textContent = ""; // Clear error if valid
+    errorText.textContent = "";
   } else {
     triggerErrorEffect(errorText, "Invalid input, try again.");
     return;
@@ -642,7 +707,7 @@ document.getElementById("set-x-title").addEventListener("click", function () {
       currentChart.destroy();
       generateChart(parsedData); // Re-generate chart with updated axis titles
     }
-    errorText.textContent = ""; // Clear error if valid
+    errorText.textContent = "";
   } else {
     triggerErrorEffect(errorText, "Invalid input, try again.");
     return;
@@ -659,7 +724,7 @@ document.getElementById("set-y-title").addEventListener("click", function () {
       currentChart.destroy();
       generateChart(parsedData); // Re-generate chart with updated axis titles
     }
-    errorText.textContent = ""; // Clear error if valid
+    errorText.textContent = "";
   } else {
     triggerErrorEffect(errorText, "Invalid input, try again.");
     return;
@@ -722,6 +787,35 @@ function generateChart(data) {
 
   isManualOverride = false;
 
+  // Get selected columns from checkboxes
+  const checkboxSection = document.getElementById("column-select-section");
+  let selectedColumns = [];
+
+  if (checkboxSection.style.display !== "none") {
+    const checkedBoxes = document.querySelectorAll(
+      '#column-checkboxes input[type="checkbox"]:checked'
+    );
+    selectedColumns = Array.from(checkedBoxes).map((cb) => cb.value);
+  } else {
+    selectedColumns = Object.keys(data[0]);
+  }
+
+  if (selectedColumns.length < 2) {
+    alert("Select at least two columns to generate the chart.");
+    return;
+  }
+
+  // Filter data to only selected columns
+  const filteredCheckBoxData = data.map((row) => {
+    let filteredRow = {};
+    selectedColumns.forEach((col) => {
+      filteredRow[col] = row[col];
+    });
+    return filteredRow;
+  });
+
+  data = filteredCheckBoxData;
+
   if (!data || data.length === 0) {
     alert("No valid data available for visualization.");
     return;
@@ -768,7 +862,7 @@ function generateChart(data) {
   }
   // Handle bar and line charts
   else if (chartType === "bar" || chartType === "line") {
-    if (numericColumns.length === 0) {
+    if (numericColumns.length === 0 || categoricalColumns.length === 0) {
       alert(
         "Bar/line charts require at least 1 numerical and 1 categorical column."
       );

@@ -74,7 +74,6 @@ li {
   height: 4vh;
 }
 
-/* Main Layout with Two Columns */
 #main-layout {
   display: flex;
   flex-wrap: wrap;
@@ -136,7 +135,6 @@ section {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* File Selected Box */
 #file-info {
   margin-top: 20px;
   padding: 15px;
@@ -226,7 +224,7 @@ button {
   letter-spacing: 0.1em;
   padding: 10px 20px;
   font-size: 13.4px;
-  font-weight: regular;
+  font-weight: normal;
   border-radius: 12px;
   border: 2px solid transparent;
   background-color: #4caf50;
@@ -245,7 +243,6 @@ button:focus {
   box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5);
 }
 
-/* Export Buttons */
 #export-csv-btn,
 #export-image-btn {
   margin-top: 20px;
@@ -373,7 +370,7 @@ button:focus {
   margin-top: 30px;
 }
 
-/* Styling the checkbox container */
+/* Checkbox container styling */
 .statistic-container label {
   font-size: 1.2em;
   font-weight: bold;
@@ -395,7 +392,7 @@ button:focus {
   margin-bottom: 5px;
 }
 
-/* Create the custom checkbox appearance */
+/* Custom checkbox appearance */
 .statistic-container .checkbox-label::before {
   content: "";
   position: absolute;
@@ -428,13 +425,13 @@ button:focus {
   transform: rotate(45deg);
 }
 
-/* Styling when hover over checkbox */
+/* Styling when hovering over checkbox */
 .statistic-container .checkbox-label:hover::before {
   background-color: #e8f5e9;
   border-color: #81c784;
 }
 
-/* Adding spacing between checkboxes */
+/* ASpacing between checkboxes */
 .statistic-container input[type="checkbox"]:not(:last-child) + .checkbox-label {
   margin-bottom: 8px;
 }
@@ -486,37 +483,44 @@ button:focus {
 }
 
 #chart-title-error {
-  margin-left: 10px;
+  margin-left: 5px;
   color: green;
   font-size: 14px;
   font-weight: bold;
 }
 
 #x-title-error {
-  margin-left: 10px;
+  margin-left: 5px;
   color: green;
   font-size: 14px;
   font-weight: bold;
 }
 
 #y-title-error {
-  margin-left: 10px;
+  margin-left: 5px;
   color: green;
   font-size: 14px;
   font-weight: bold;
 }
 
 #file-upload-error {
-  margin-left: 10px;
+  margin-left: 5px;
   color: green;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: bold;
 }
 
 #invalid-file-error {
-  margin-left: 10px;
+  margin-left: 5px;
   color: green;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+#column-select-error {
+  margin-left: 5px;
+  color: green;
+  font-size: 15px;
   font-weight: bold;
 }
 
@@ -577,4 +581,69 @@ button:focus {
 
 .or-divider:not(:empty)::after {
   margin-left: 0.75em;
+}
+
+#column-checkboxes {
+  margin-bottom: 10px;
+}
+
+#column-checkboxes label {
+  position: relative;
+  padding-left: 30px;
+  cursor: pointer;
+  user-select: none;
+  margin-right: 12px;
+  display: inline-block;
+  line-height: 20px;
+  font-family: Leelawadee, Leelawadee;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+/* Hide native checkbox */
+#column-checkboxes label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+/* Custom checkbox box */
+#column-checkboxes label::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid #4caf50;
+  border-radius: 4px;
+  background: #fff;
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+#column-checkboxes label:has(input[type="checkbox"]:checked)::before {
+  background-color: #4caf50;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
+}
+
+/* Checkmark */
+#column-checkboxes label:has(input[type="checkbox"]:checked)::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  width: 7px;
+  height: 12px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+}
+
+#column-checkboxes label:hover::before {
+  background-color: #e8f5e9;
+  border-color: #81c784;
 }
