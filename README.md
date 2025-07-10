@@ -1,4 +1,4 @@
-# QuickViz - WebApp (Ongoing)
+# QuickViz - WebApp (Ongoing and Undergoing Rework)
 
 A dynamic web application that automatically generates the most suitable data visualization chart from your uploaded datasets (CSV, JSON, XLSX). It provides insightful summaries including mean, median, mode, and outlier detection to help users quickly understand their data. You can customize your chart's title and axis titles, switch between chart types, and export your data and charts with ease.
 
