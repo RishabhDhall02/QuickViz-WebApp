@@ -1,19 +1,8 @@
-let currentChart = null; // Store the current chart instance
 let parsedData = null; // Store parsed data
-let globalNumericColumns = [];
-let globalCategoricalColumns = [];
-let globalChartType = "";
-let originalParsedData = [];
-let selectedColumnsGlobal = [];
-
-// Function to trigger the brief disappear-reappear effect
-function triggerErrorEffect(errorElement, message) {
-  errorElement.style.opacity = "0"; // Hide briefly
-  setTimeout(() => {
-    errorElement.textContent = message;
-    errorElement.style.opacity = "1"; // Show again
-  }, 100); // Short delay for effect
-}
+let lastUsedConfigs = [];
+let lastUsedData = [];
+let currentSlideIndex = 0;
+let currentChartInstance = null;
 
 // Function to trigger the brief disappear-reappear effect
 function showErrorMessage(errorElement, message, otherErrorElement) {
@@ -24,6 +13,64 @@ function showErrorMessage(errorElement, message, otherErrorElement) {
     errorElement.style.opacity = "1"; // Show again
   }, 100); // Short delay for effect
 }
+
+// Drag-n-drop listener
+document.addEventListener("DOMContentLoaded", () => {
+  const fileInput = document.getElementById("file-input");
+  const dropZone = document.getElementById("drop-zone");
+
+  if (fileInput) {
+    fileInput.addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      const fileInfo = document.getElementById("file-info");
+
+      if (file && fileInfo) {
+        fileInfo.querySelector(
+          ".file-name"
+        ).textContent = `File selected: ${file.name}`;
+        fileInfo.querySelector(
+          ".file-type"
+        ).textContent = `File type: ${file.type}`;
+      } else if (fileInfo) {
+        fileInfo.querySelector(".file-name").textContent = "No file selected";
+        fileInfo.querySelector(".file-type").textContent = "";
+      }
+    });
+  }
+
+  if (dropZone && fileInput) {
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+
+      const file = e.dataTransfer.files[0];
+      if (
+        file &&
+        (file.name.endsWith(".csv") ||
+          file.name.endsWith(".json") ||
+          file.name.endsWith(".xlsx"))
+      ) {
+        fileInput.files = e.dataTransfer.files;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          parseCSV(e.target.result);
+        };
+        reader.readAsText(file);
+      } else {
+        showFileError("Please drop a valid .csv, .json, or .xlsx file.");
+      }
+    });
+  }
+});
 
 // Function to upload the file and parse it
 function uploadFile() {
@@ -69,1045 +116,923 @@ function uploadFile() {
   fileReader.onload = function (e) {
     const content = e.target.result;
     console.log("File content loaded:", content);
-    const parsedData = parseCSV(content);
-
-    window.originalParsedData = parsedData;
-
-    const headers = parsedData[0] ? Object.keys(parsedData[0]) : [];
-    showColumnCheckboxes(headers);
+    parseCSV(content);
   };
 
   fileReader.readAsText(file);
+  showSection("part-2");
 }
 
-// Add an event listener for the file input change
-document
-  .getElementById("file-input")
-  .addEventListener("change", function (event) {
-    const file = event.target.files[0]; // Get the first selected file
-    const fileInfo = document.getElementById("file-info"); // The div where it will show file info
+document.getElementById("file-input").addEventListener("change", function () {
+  const file = this.files[0];
+  if (file) {
+    document.querySelector(".file-name").textContent = file.name;
+    document.querySelector(".file-type").textContent = file.type;
+  }
+});
 
-    if (file) {
-      const fileName = file.name;
-      const fileType = file.type;
-
-      fileInfo.querySelector(
-        ".file-name"
-      ).textContent = `File selected: ${fileName}`;
-      fileInfo.querySelector(
-        ".file-type"
-      ).textContent = `File type: ${fileType}`;
+function showSection(idToShow) {
+  const sections = ["part-1", "part-2", "part-3"];
+  sections.forEach((id) => {
+    const el = document.getElementById(id);
+    if (id === idToShow) {
+      el.style.display = "flex"; // Restore flex layout for centering
     } else {
-      fileInfo.querySelector(".file-name").textContent = "No file selected";
-      fileInfo.querySelector(".file-type").textContent = "";
+      el.style.display = "none";
     }
   });
-
-function showColumnCheckboxes(columnNames) {
-  const section = document.getElementById("column-select-section");
-  const container = document.getElementById("column-checkboxes");
-  const updateBtn = document.getElementById("update-chart-btn");
-
-  container.innerHTML = "";
-
-  columnNames.forEach((col) => {
-    const label = document.createElement("label");
-    label.style.marginRight = "12px";
-
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.name = "column";
-    checkbox.value = col;
-    checkbox.checked = true;
-
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(" " + col));
-    container.appendChild(label);
-  });
-
-  section.style.display = "block";
-  updateBtn.disabled = false;
 }
 
-function updateChartWithSelectedColumns() {
-  const selectedCols = Array.from(
-    document.querySelectorAll("input[name='column']:checked")
-  ).map((input) => input.value);
+document.getElementById("to-part-1").addEventListener("click", () => {
+  showSection("part-1");
+});
 
-  const errorDisplay = document.getElementById("column-select-error");
+document.getElementById("to-part-3").addEventListener("click", () => {
+  showSection("part-3");
+});
 
-  if (selectedCols.length < 2) {
-    errorDisplay.textContent = "Select at least 2 columns.";
-    return;
-  } else {
-    errorDisplay.textContent = "";
-  }
+// Example: after successful upload
+document.getElementById("upload-btn").addEventListener("click", function () {
+  uploadFile();
+});
 
-  const filteredData = window.originalParsedData.map((row) => {
-    const filteredRow = {};
-    selectedCols.forEach((col) => (filteredRow[col] = row[col]));
-    return filteredRow;
+function captureChartImage(callback) {
+  requestAnimationFrame(() => {
+    const canvas = document.getElementById("slide-canvas");
+    try {
+      const imgData = canvas.toDataURL("image/png");
+      if (!imgData.startsWith("data:image/png;base64,")) {
+        console.error("Invalid image data format");
+        callback(null);
+        return;
+      }
+      callback(imgData);
+    } catch (err) {
+      console.error("Error capturing chart image:", err);
+      callback(null);
+    }
   });
-
-  generateChart(filteredData);
 }
 
-const dropZone = document.getElementById("drop-zone");
-const fileInput = document.getElementById("file-input");
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let index = 0;
 
-dropZone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropZone.classList.add("dragover");
-});
+  function processNextChart() {
+    if (index >= lastUsedConfigs.length) {
+      pdf.save("charts.pdf");
+      return;
+    }
 
-dropZone.addEventListener("dragleave", () => {
-  dropZone.classList.remove("dragover");
-});
+    renderSlideChart(index);
 
-dropZone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dropZone.classList.remove("dragover");
+    // Wait for chart render and capture
+    captureChartImage((imgData) => {
+      if (!imgData) {
+        console.warn("Skipping chart due to capture error.");
+        index++;
+        processNextChart();
+        return;
+      }
 
-  const file = e.dataTransfer.files[0];
-  if (
-    file &&
-    (file.name.endsWith(".csv") ||
-      file.name.endsWith(".json") ||
-      file.name.endsWith(".xlsx"))
-  ) {
-    fileInput.files = e.dataTransfer.files; // update input so UI stays in sync
-    uploadFile(file);
-  } else {
-    showFileError("Please drop a valid .csv, .json, or .xlsx file.");
-  }
-});
+      if (index > 0) pdf.addPage();
+      pdf.addImage(imgData, "PNG", 10, 10, 180, 100);
 
-document
-  .getElementById("copy-email-btn")
-  .addEventListener("click", function () {
-    const email = "rishabhdhall02@gmail.com";
-    navigator.clipboard
-      .writeText(email)
-      .then(() => {
-        const msg = document.getElementById("copy-email-msg");
-
-        // Reset the animation by hiding the message briefly
-        msg.style.display = "none";
-
-        setTimeout(() => {
-          msg.style.display = "inline"; // Show it again after a brief delay
-
-          // Hide the message after 5 seconds
-          setTimeout(() => {
-            msg.style.display = "none";
-          }, 5000);
-        }, 100); // 100ms blink effect
-      })
-      .catch((err) => {
-        console.error("Failed to copy email: ", err);
+      const insights = generateInsights(lastUsedConfigs[index], lastUsedData);
+      pdf.setFontSize(12);
+      pdf.text("Insights:", 10, 120);
+      insights.forEach((line, i) => {
+        pdf.text(`- ${line}`, 10, 130 + i * 8);
       });
-  });
 
-// Function to calculate mean
-function calculateMean(data) {
-  const sum = data.reduce((acc, value) => acc + value, 0);
-  return sum / data.length;
-}
-
-// Function to calculate median
-function calculateMedian(data) {
-  data.sort((a, b) => a - b);
-  const mid = Math.floor(data.length / 2);
-  return data.length % 2 !== 0 ? data[mid] : (data[mid - 1] + data[mid]) / 2;
-}
-
-// Function to calculate mode
-function calculateMode(data) {
-  const frequency = {};
-  let maxFreq = 0;
-  let modes = [];
-  data.forEach((value) => {
-    frequency[value] = (frequency[value] || 0) + 1;
-    if (frequency[value] > maxFreq) {
-      maxFreq = frequency[value];
-    }
-  });
-
-  for (let value in frequency) {
-    if (frequency[value] === maxFreq) {
-      modes.push(value);
-    }
+      index++;
+      processNextChart();
+    });
   }
 
-  return modes;
+  processNextChart();
 }
 
-// Function to calculate outliers using IQR
-function calculateOutliers(data) {
-  data.sort((a, b) => a - b);
-  const Q1 = calculateMedian(data.slice(0, Math.floor(data.length / 2)));
-  const Q3 = calculateMedian(data.slice(Math.ceil(data.length / 2)));
-  const IQR = Q3 - Q1;
-  const lowerLimit = Q1 - 1.5 * IQR;
-  const upperLimit = Q3 + 1.5 * IQR;
-  const outliers = data.filter(
-    (value) => value < lowerLimit || value > upperLimit
-  );
-  return outliers;
+function exportPPT() {
+  const pptx = new PptxGenJS();
+  let index = 0;
+
+  function processNextChart() {
+    if (index >= lastUsedConfigs.length) {
+      pptx.writeFile("charts.pptx");
+      return;
+    }
+
+    renderSlideChart(index);
+
+    captureChartImage((imgData) => {
+      if (!imgData) {
+        console.warn("Skipping chart due to capture error.");
+        index++;
+        processNextChart();
+        return;
+      }
+
+      const slide = pptx.addSlide();
+      slide.addImage({ data: imgData, x: 0.5, y: 0.5, w: 8, h: 4.5 });
+
+      const insights = generateInsights(lastUsedConfigs[index], lastUsedData);
+      slide.addText("Insights:", { x: 0.5, y: 5.2, fontSize: 14, bold: true });
+      slide.addText(insights.map((i) => `• ${i}`).join("\n"), {
+        x: 0.5,
+        y: 5.5,
+        fontSize: 12,
+        color: "363636",
+      });
+
+      index++;
+      processNextChart();
+    });
+  }
+
+  processNextChart();
 }
 
+// Export to PDF
+document.getElementById("export-pdf").addEventListener("click", exportPDF);
+
+// Export to PPT
+document.getElementById("export-ppt").addEventListener("click", exportPPT);
+
+// Parses the CSV
 function parseCSV(content) {
-  // Reset custom titles on new dataset upload
-  xAxisTitle = null;
-  yAxisTitle = null;
-  chartTitle = "My Chart";
-
-  document.getElementById("x-axis-title").value = "";
-  document.getElementById("y-axis-title").value = "";
-  document.getElementById("chartTitle").value = "";
-
   console.log("Parsing CSV content...");
-  const result = Papa.parse(content, {
+
+  Papa.parse(content, {
     header: true,
+    skipEmptyLines: true,
     complete: function (results) {
       console.log("CSV parsed successfully: ", results);
 
       if (results.data.length === 0) {
-        alert("The CSV file is empty or does not contain valid data.");
+        alert("The CSV file is empty or invalid.");
         return;
       }
 
       parsedData = results.data; // Save parsed data globally
-      displaySummary(parsedData); // Display the dataset summary
-      displaySummaryStats(parsedData); // Display the calculated stats
-      displayPreview(parsedData); // Display dataset preview
-      generateDatasetDescription(parsedData); // Generate dataset's description
+
+      const profile = profileData(parsedData);
+      console.log("Data profile:", profile);
+
+      const chartConfigs = selectCharts(profile, parsedData);
+      console.log(
+        "Likely sales column:",
+        findLikelySalesColumn(Object.keys(profile))
+      );
+
+      lastUsedConfigs = chartConfigs;
+      lastUsedData = parsedData;
+      currentSlideIndex = 0;
+
+      if (!document.getElementById("slide-canvas")) {
+        console.error("slide-canvas element not found in DOM");
+      }
+      if (!document.getElementById("slide-title")) {
+        console.error("slide-title element not found in DOM");
+      }
+
+      renderSlideChart(currentSlideIndex);
     },
     error: function (error) {
       console.error("Error parsing CSV: ", error); // Log errors if any
     },
   });
-  return result.data;
 }
 
-function displaySummary(data) {
-  const summaryDiv = document.getElementById("summary");
-  const numRows = data.length;
-  const numColumns = data[0] ? Object.keys(data[0]).length : 0; // Count keys to get number of columns
-  summaryDiv.innerHTML = `<p>Rows: ${numRows}, Columns: ${numColumns}</p>`;
-}
-
-const statisticCheckboxes = document.querySelectorAll(
-  'input[name="statistic"]'
-);
-statisticCheckboxes.forEach((checkbox) => {
-  checkbox.addEventListener("change", function () {
-    if (parsedData) {
-      displaySummaryStats(parsedData); // Regenerate the stats based on selected checkboxes
-    }
-  });
+document.getElementById("prev-slide").addEventListener("click", () => {
+  if (currentSlideIndex > 0) {
+    console.log("Prev slide clicked, now:", currentSlideIndex);
+    currentSlideIndex--;
+    renderSlideChart(currentSlideIndex);
+  }
 });
 
-function displaySummaryStats(data) {
-  const numericColumns = getNumericColumns(data);
-
-  // Get all selected statistics
-  const selectedStatistics = Array.from(
-    document.querySelectorAll('input[name="statistic"]:checked')
-  ).map((checkbox) => checkbox.value);
-
-  // Get the summary-stats div
-  const statsDiv = document.getElementById("summary-stats");
-
-  // If there are no numeric columns, hide the div and return early
-  if (numericColumns.length === 0) {
-    statsDiv.classList.remove("visible");
-    return;
+document.getElementById("next-slide").addEventListener("click", () => {
+  if (currentSlideIndex < lastUsedConfigs.length - 1) {
+    console.log("Next slide clicked, now:", currentSlideIndex);
+    currentSlideIndex++;
+    renderSlideChart(currentSlideIndex);
   }
+});
 
-  // Otherwise, show the div by adding the 'visible' class
-  statsDiv.classList.add("visible");
-
-  // Clear previous stats before displaying new ones
-  statsDiv.innerHTML = "";
-
-  numericColumns.forEach((col) => {
-    const columnData = data
-      .map((row) => parseFloat(row[col]))
-      .filter((value) => !isNaN(value));
-
-    let columnStats = "";
-
-    // For each selected statistic, calculate and display it
-    selectedStatistics.forEach((statistic) => {
-      let statisticValue = "";
-
-      switch (statistic) {
-        case "mean":
-          statisticValue = `Mean: ${calculateMean(columnData)}`;
-          break;
-        case "median":
-          statisticValue = `Median: ${calculateMedian(columnData)}`;
-          break;
-        case "mode":
-          statisticValue = `Mode: ${calculateMode(columnData).join(", ")}`;
-          break;
-        case "outlier":
-          statisticValue = `Outliers: ${calculateOutliers(columnData).join(
-            ", "
-          )}`;
-          break;
-        default:
-          statisticValue = "No valid statistic selected.";
-      }
-
-      columnStats += `<p>${statisticValue}</p>`;
-    });
-
-    // Display all the stats for the column
-    statsDiv.innerHTML += `
-      <h3>Column: ${col}</h3>
-      ${columnStats}
-      <hr>
-    `;
-  });
+function renderChartsWrapper(configs, data) {
+  lastUsedConfigs = configs;
+  lastUsedData = data;
+  console.log("Rendering charts wrapper with configs:", configs);
+  renderCharts(configs, data);
 }
 
-function generateDatasetDescription(parsedData) {
-  if (!parsedData || parsedData.length === 0) {
-    document.getElementById("dataset-description").textContent =
-      "No data available.";
-    return;
-  }
+function profileData(data) {
+  const columns = Object.keys(data[0]); // Get column names from first row
+  const profile = {};
 
-  const numRows = parsedData.length;
-  const numCols = Object.keys(parsedData[0]).length;
-  let categoricalColumns = globalCategoricalColumns;
-  let numericalColumns = globalNumericColumns;
+  console.log("Columns detected for profiling:", columns);
 
-  // Get the dataset-description div
-  const dataDiv = document.getElementById("dataset-description");
+  for (const col of columns) {
+    const values = data.map((row) => row[col]);
+    const nonEmpty = values.filter(
+      (v) => v !== "" && v !== null && v !== undefined
+    );
 
-  // If there are no numeric columns, hide the div and return early
-  if (numericalColumns.length === 0) {
-    dataDiv.classList.remove("visible");
-    return;
-  }
+    const numericVals = nonEmpty
+      .map((v) => parseFloat(v))
+      .filter((v) => !isNaN(v));
 
-  // Otherwise, show the div by adding the 'visible' class
-  dataDiv.classList.add("visible");
+    console.log(
+      `Column "${col}" - sample non-empty values:`,
+      nonEmpty.slice(0, 5)
+    );
 
-  let description = `This dataset contains <strong>${numRows} rows</strong> and <strong>${numCols} columns</strong>. `;
+    const uniqueVals = [...new Set(nonEmpty)];
+    const missingCount = values.length - nonEmpty.length;
 
-  // Categorical column details
-  if (categoricalColumns.length > 0) {
-    description += `The categorical columns are <strong>${categoricalColumns.join(
-      ", "
-    )}</strong>. `;
-  }
+    let type = "unknown";
 
-  // Numerical column details
-  if (numericalColumns.length > 0) {
-    description += `The numerical columns are <strong>${numericalColumns.join(
-      ", "
-    )}</strong>. `;
+    // First, check if all valid dates
+    const allValidDates = nonEmpty.every((v) => parseDateLabel(v) !== null);
 
-    let trendDescriptions = [];
-    let columnTrends = {};
-    let comparisonTrends = [];
+    if (allValidDates) {
+      type = "date";
+      console.log(`Type decided: date (all values are valid dates)`);
+    } else {
+      // Then check if all numeric
+      if (nonEmpty.every((v) => !isNaN(parseFloat(v)))) {
+        type = "numeric";
+        console.log(`Type decided: numeric (all values parse to numbers)`);
+      } else if (uniqueVals.length < values.length * 0.3) {
+        type = "categorical";
+        console.log(
+          `Type decided: categorical (unique vals less than 30% of total)`
+        );
+      } else {
+        type = "text";
+        console.log(`Type decided: text (default fallback)`);
+      }
+    }
 
-    // Group columns by trends (increasing, decreasing, fluctuating)
-    let trendGroups = {
-      increasing: [],
-      decreasing: [],
-      fluctuating: [],
+    profile[col] = {
+      type,
+      uniqueCount: uniqueVals.length,
+      missingCount,
+      sampleValues: uniqueVals.slice(0, 5),
     };
 
-    numericalColumns.forEach((col) => {
-      let values = parsedData
-        .map((row) => parseFloat(row[col]))
-        .filter((val) => !isNaN(val));
+    if (type === "numeric") {
+      const sum = numericVals.reduce((a, b) => a + b, 0);
+      const mean = sum / numericVals.length;
+      const min = Math.min(...numericVals);
+      const max = Math.max(...numericVals);
 
-      let min = Math.min(...values);
-      let max = Math.max(...values);
-      let avg = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2);
-
-      // Determine the trend in values
-      let increasing = values.every((v, i, arr) => i === 0 || v >= arr[i - 1]);
-      let decreasing = values.every((v, i, arr) => i === 0 || v <= arr[i - 1]);
-
-      let trend = "fluctuating";
-      if (increasing) trend = "increasing";
-      if (decreasing) trend = "decreasing";
-
-      columnTrends[col] = trend;
-
-      // Detect outliers (biggest jump)
-      let maxJump = 0;
-      let jumpIndex = -1;
-      for (let i = 1; i < values.length; i++) {
-        let diff = Math.abs(values[i] - values[i - 1]);
-        if (diff > maxJump) {
-          maxJump = diff;
-          jumpIndex = i;
-        }
-      }
-
-      let outlierMsg =
-        maxJump > (max - min) * 0.4 // If jump is 40%+ of range, count as outlier
-          ? `A significant jump occurs between row <strong>${
-              jumpIndex + 1
-            }</strong> and <strong>${jumpIndex + 2}</strong>.`
-          : "";
-
-      // Add the column to the appropriate trend group
-      trendGroups[trend].push(col);
-
-      // Fix article for grammar (a or an)
-      let article = ["a", "e", "i", "o", "u"].includes(trend[0].toLowerCase())
-        ? "an"
-        : "a";
-
-      trendDescriptions.push(
-        `For <strong>${col}</strong>, the values show ${article} <strong>${trend} trend</strong>. The minimum is <strong>${min}</strong>, maximum is <strong>${max}</strong>, and the average is <strong>${avg}</strong>. ${outlierMsg}`
-      );
-    });
-
-    // Group similar trends together in one sentence
-    Object.keys(trendGroups).forEach((trend) => {
-      if (trendGroups[trend].length > 0) {
-        let trendColumns = trendGroups[trend].join(", ");
-        // Fix article for grammar (a or an)
-        let article = ["a", "e", "i", "o", "u"].includes(trend[0].toLowerCase())
-          ? "an"
-          : "a";
-        trendDescriptions.push(
-          `The following columns show ${article} <strong>${trend}</strong> trend: <strong>${trendColumns}</strong>.`
-        );
-      }
-    });
-
-    // Append to description
-    description += trendDescriptions.join(" ") + " ";
-    if (comparisonTrends.length > 0) {
-      description += comparisonTrends.join(" ");
+      profile[col].stats = { sum, mean, min, max };
     }
   }
 
-  document.getElementById("dataset-description").innerHTML = description;
+  return profile;
 }
 
-function getNumericColumns(data) {
-  // Get column names and filter for numeric columns
-  const columnNames = Object.keys(data[0]);
-  return columnNames.filter((col) => {
-    return data.some((row) => !isNaN(parseFloat(row[col])));
-  });
-}
-
-function displayPreview(data) {
-  const table = document.getElementById("preview-table");
-  table.innerHTML = ""; // Clear previous table content
-
-  // Create table header
-  const headerRow = document.createElement("tr");
-  Object.keys(data[0]).forEach((key) => {
-    const th = document.createElement("th");
-    th.innerText = key;
-    headerRow.appendChild(th);
-  });
-  table.appendChild(headerRow);
-
-  // Limit the preview to the first 10 rows
-  const maxRows = 10;
-  data.slice(0, maxRows).forEach((row) => {
-    const tr = document.createElement("tr");
-    Object.values(row).forEach((value) => {
-      const td = document.createElement("td");
-      td.innerText = value;
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  });
-}
-
-// Function to convert data to CSV format
-function convertToCSV(data) {
-  const header = ["Label", "Value"]; // Define headers for CSV
-  const rows = data.labels.map((label, index) => {
-    return [label, data.datasets[0].data[index]]; // Map labels and corresponding values
-  });
-
-  // Combine headers and rows into one array
-  const csvRows = [header, ...rows];
-
-  // Convert the array into a CSV string
-  const csvString = csvRows.map((row) => row.join(",")).join("\n");
-
-  return csvString;
-}
-
-// Function to export the chart data as CSV
-function exportChartAsCSV() {
-  if (!currentChart) {
-    alert("No chart to export.");
-    return;
-  }
-
-  // Get the labels and data from the current chart
-  const labels = currentChart.data.labels;
-  const datasets = currentChart.data.datasets;
-
-  // Create a CSV string
-  let csvContent =
-    "Label," + datasets.map((dataset) => dataset.label).join(",") + "\n"; // CSV header
-
-  // Iterate through the data and format it into CSV rows
-  const rows = labels.map((label, index) => {
-    const rowData = [label];
-    datasets.forEach((dataset) => {
-      rowData.push(dataset.data[index]);
-    });
-    return rowData.join(",");
-  });
-
-  // Add the rows to the CSV string
-  csvContent += rows.join("\n");
-
-  // Create a Blob from the CSV content
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-
-  // Create a temporary link element to trigger the download
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.download = "chart-data.csv"; // Set the file name for the downloaded CSV
-
-  // Trigger the download by simulating a click event
-  link.click();
-
-  // Clean up the URL object after the download
-  URL.revokeObjectURL(url);
-}
-
-// Event listener for the export CSV button
-document
-  .getElementById("export-csv-btn")
-  .addEventListener("click", exportChartAsCSV);
-
-// Function to export the chart as an image (JPEG)
-function exportChartAsImage() {
-  if (!currentChart) {
-    alert("No chart to export.");
-    return;
-  }
-
-  // Create a new canvas element
-  const exportCanvas = document.createElement("canvas");
-  const exportCtx = exportCanvas.getContext("2d");
-
-  // Set the dimensions of the new canvas to match the chart's canvas
-  exportCanvas.width = currentChart.canvas.width;
-  exportCanvas.height = currentChart.canvas.height;
-
-  // Set the background color to white
-  exportCtx.fillStyle = "white";
-  exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-
-  // Now render the current chart to the new canvas
-  exportCtx.drawImage(currentChart.canvas, 0, 0);
-
-  // Convert the canvas to an image (JPEG format)
-  const imageUrl = exportCanvas.toDataURL("image/jpeg", 1.0);
-
-  // Create a temporary link element to trigger the download
-  const link = document.createElement("a");
-  link.href = imageUrl;
-  link.download = "chart-image.jpeg"; // Set the file name for the downloaded image
-
-  // Trigger the download by simulating a click event
-  link.click();
-}
-
-// Event listener for the export image button
-document
-  .getElementById("export-image-btn")
-  .addEventListener("click", exportChartAsImage);
-
-let isManualOverride = false; // Flag to track if the user has manually overridden the chart type
-
-// Function to detect chart type automatically based on data
-function autoDetectChartType(data) {
-  if (!data || data.length === 0) return "bar"; // Default if no data
-
-  const columnNames = Object.keys(data[0]); // Extract column names
-
-  // Detect numeric columns
-  const numericColumns = columnNames.filter((col) =>
-    data.some((row) => row[col] && !isNaN(parseFloat(row[col])))
+function findLikelyCategoryColumn(categoricalCols) {
+  // Skip anything that looks like an ID
+  const idPatterns = ["id", "code", "number"];
+  return (
+    categoricalCols.find(
+      (col) => !idPatterns.some((p) => col.toLowerCase().includes(p))
+    ) || categoricalCols[0]
   );
-
-  // Detect categorical columns
-  const categoricalColumns = columnNames.filter((col) =>
-    data.some((row) => row[col] && isNaN(parseFloat(row[col])))
-  );
-
-  // Scatter Plot: Exactly 2 numeric columns
-  if (numericColumns.length === 2 && categoricalColumns.length === 0) {
-    return "scatter";
-  }
-
-  // Bar Chart: 1 categorical + 3 or more numeric columns (no clear trend)
-  if (numericColumns.length >= 3 && categoricalColumns.length === 1) {
-    return "bar";
-  }
-
-  // Line Chart: Multiple numeric columns + 1 categorical column (like a timeline)
-  if (numericColumns.length > 1 && categoricalColumns.length === 1) {
-    return "line";
-  }
-
-  // Pie Chart: 1 numeric column + at least 1 categorical column
-  if (numericColumns.length === 1 && categoricalColumns.length > 0) {
-    return "pie";
-  }
-
-  return "bar"; // Default fallback if conditions don't match
 }
 
-let chartTitle = "My Chart"; // Default title
-
-// Add event listener to the "Enter" button
-document.getElementById("set-title-btn").addEventListener("click", function () {
-  const userInput = document.getElementById("chartTitle").value.trim();
-  const errorText = document.getElementById("chart-title-error");
-  if (userInput) {
-    chartTitle = userInput; // Store the entered title
-    if (currentChart) {
-      currentChart.destroy();
-      generateChart(parsedData);
+function findLikelySalesColumn(numericCols) {
+  // Prioritize column names that likely represent sales/revenue
+  const salesKeywords = ["sales", "revenue", "amount", "total"];
+  for (const col of numericCols) {
+    const lower = col.toLowerCase();
+    if (salesKeywords.some((keyword) => lower.includes(keyword))) {
+      return col;
     }
-    errorText.textContent = "";
-  } else {
-    triggerErrorEffect(errorText, "Invalid input, try again.");
-    return;
   }
-});
 
-let xAxisTitle = null; // Default X-Axis title
-let yAxisTitle = null; // Default Y-Axis title
+  // Default to first numeric column if no match found
+  return numericCols[0];
+}
 
-// Add event listener to the "Enter" button for X-Axis
-document.getElementById("set-x-title").addEventListener("click", function () {
-  const userInputX = document.getElementById("x-axis-title").value.trim();
-  const errorText = document.getElementById("x-title-error");
-  if (userInputX) {
-    xAxisTitle = userInputX; // Store the entered X-Axis title
-    if (currentChart) {
-      currentChart.destroy();
-      generateChart(parsedData); // Re-generate chart with updated axis titles
+function isIdentifierColumn(name) {
+  const lower = name.toLowerCase();
+  return (
+    lower.includes("id") || lower.includes("name") || lower.includes("code")
+  );
+}
+
+function selectCharts(profile, data = lastUsedData) {
+  const chartsToRender = [];
+  const columnNames = Object.keys(profile);
+
+  const numericCols = columnNames.filter(
+    (col) => profile[col].type === "numeric"
+  );
+  let categoricalCols = columnNames.filter((col) =>
+    ["categorical", "text"].includes(profile[col].type)
+  );
+  categoricalCols = categoricalCols.filter((c) => !isIdentifierColumn(c));
+
+  const likelySalesCol = findLikelySalesColumn(numericCols);
+  console.log("Likely sales column:", likelySalesCol);
+
+  const categoryCol = findLikelyCategoryColumn(categoricalCols);
+
+  const dateCols = columnNames.filter((col) => profile[col].type === "date");
+  console.log("Profile inside selectCharts:", profile);
+
+  // 1. Line chart: sales over time (month+year grouping)
+  if (
+    dateCols.length &&
+    numericCols.length &&
+    likelySalesCol &&
+    profile[dateCols[0]].sampleValues.every((v) => parseDateLabel(v) !== null)
+  ) {
+    const dateCol = dateCols[0];
+    const salesCol = likelySalesCol;
+    const monthYearMap = {}; // key = "YYYY-MM" -> { label: "Jan 2024", total: N }
+
+    (data || []).forEach((row) => {
+      const raw = row[dateCol];
+      const dateObj = parseDateLabel(raw);
+      if (!dateObj) return;
+
+      const key = `${dateObj.getFullYear()}-${String(
+        dateObj.getMonth() + 1
+      ).padStart(2, "0")}`;
+      const label = `${dateObj.toLocaleString("default", {
+        month: "short",
+      })} ${dateObj.getFullYear()}`;
+      const salesVal = parseFloat(row[salesCol]) || 0;
+
+      if (!monthYearMap[key]) monthYearMap[key] = { label, total: 0 };
+      monthYearMap[key].total += salesVal;
+    });
+
+    // Sort keys chronologically
+    const sortedKeys = Object.keys(monthYearMap).sort();
+    const groupedDates = sortedKeys.map((k) => monthYearMap[k].label);
+    const groupedValues = sortedKeys.map((k) => monthYearMap[k].total);
+
+    if (groupedDates.length > 0) {
+      chartsToRender.push({
+        type: "line",
+        x: groupedDates,
+        y: groupedValues,
+        title: "Sales Over Time (Monthly)",
+        preaggregated: true,
+      });
     }
-    errorText.textContent = "";
-  } else {
-    triggerErrorEffect(errorText, "Invalid input, try again.");
-    return;
   }
-});
 
-// Add event listener to the "Enter" button for Y-Axis
-document.getElementById("set-y-title").addEventListener("click", function () {
-  const userInputY = document.getElementById("y-axis-title").value.trim();
-  const errorText = document.getElementById("y-title-error");
-  if (userInputY) {
-    yAxisTitle = userInputY; // Store the entered Y-Axis title
-    if (currentChart) {
-      currentChart.destroy();
-      generateChart(parsedData); // Re-generate chart with updated axis titles
-    }
-    errorText.textContent = "";
-  } else {
-    triggerErrorEffect(errorText, "Invalid input, try again.");
-    return;
+  // 2. Bar chart: sales by category
+  if (categoryCol && numericCols.length) {
+    chartsToRender.push({
+      type: "bar",
+      x: categoryCol,
+      y: likelySalesCol,
+      title: `Sales by ${categoryCol}`,
+    });
   }
-});
 
-// Reset buttons
-document
-  .getElementById("reset-title-btn")
-  .addEventListener("click", function () {
-    document.getElementById("chartTitle").value = "";
-    chartTitle = "My Chart";
-    if (currentChart) {
-      currentChart.destroy();
-      generateChart(parsedData); // Re-generate chart with updated axis titles
-    }
-  });
-
-document.getElementById("reset-x-title").addEventListener("click", function () {
-  document.getElementById("x-axis-title").value = "";
-  let xAxisTitleTemp = null;
-  // Determine the default X-Axis title from generateChart() logic
-  globalChartType = document.getElementById("chart-type").value;
-  xAxisTitleTemp =
-    globalChartType === "scatter"
-      ? globalNumericColumns[0]
-      : globalCategoricalColumns[0] || `${globalNumericColumns[0]}`;
-
-  xAxisTitle = xAxisTitleTemp; // Update x-axis title
-  if (currentChart) {
-    currentChart.destroy();
-    generateChart(parsedData); // Re-generate chart
-  }
-});
-
-document.getElementById("reset-y-title").addEventListener("click", function () {
-  document.getElementById("y-axis-title").value = "";
-  let yAxisTitleTemp = null;
-  // Determine the default Y-Axis title from generateChart() logic
-  globalChartType = document.getElementById("chart-type").value;
-  yAxisTitleTemp =
-    globalChartType === "scatter"
-      ? globalNumericColumns[1]
-      : globalNumericColumns.length === 2 &&
-        globalCategoricalColumns.length === 0
-      ? globalNumericColumns[1]
-      : "Values";
-
-  yAxisTitle = yAxisTitleTemp; // Update y-axis title
-  if (currentChart) {
-    currentChart.destroy();
-    generateChart(parsedData); // Re-generate chart
-  }
-});
-
-function generateChart(data) {
-  const chartType = isManualOverride
-    ? document.getElementById("chart-type").value
-    : autoDetectChartType(data);
-
-  isManualOverride = false;
-
-  // Get selected columns from checkboxes
-  const checkboxSection = document.getElementById("column-select-section");
-  let selectedColumns = [];
-
-  if (checkboxSection.style.display !== "none") {
-    const checkedBoxes = document.querySelectorAll(
-      '#column-checkboxes input[type="checkbox"]:checked'
+  // 3. Horizontal Bar chart
+  for (const col of categoricalCols) {
+    const uniqueVals = profile[col].uniqueCount || 0;
+    const maxLabelLength = Math.max(
+      ...profile[col].sampleValues.map((val) => (val || "").length)
     );
-    selectedColumns = Array.from(checkedBoxes).map((cb) => cb.value);
-  } else {
-    selectedColumns = Object.keys(data[0]);
+    if ((uniqueVals >= 6 && uniqueVals <= 15) || maxLabelLength > 12) {
+      chartsToRender.push({
+        type: "bar",
+        x: likelySalesCol,
+        y: col,
+        title: `Sales by ${col} (Horizontal)`,
+        horizontal: true,
+      });
+      break;
+    }
   }
 
-  if (selectedColumns.length < 2) {
-    alert("Select at least two columns to generate the chart.");
-    return;
-  }
-
-  // Filter data to only selected columns
-  const filteredCheckBoxData = data.map((row) => {
-    let filteredRow = {};
-    selectedColumns.forEach((col) => {
-      filteredRow[col] = row[col];
+  // 4. Pie chart
+  if (categoricalCols.length && numericCols.length) {
+    chartsToRender.push({
+      type: "pie",
+      labels: categoricalCols[0],
+      values: likelySalesCol,
+      title: `Sales Distribution by ${categoricalCols[0]}`,
     });
-    return filteredRow;
+  }
+
+  console.log("Charts to render:", chartsToRender);
+  return chartsToRender;
+}
+
+function aggregateDataByCategory(data, categoryCol, valueCol) {
+  const aggregation = {};
+
+  data.forEach((row) => {
+    const category = row[categoryCol];
+    const value = parseFloat(row[valueCol]) || 0;
+
+    if (!aggregation[category]) {
+      aggregation[category] = 0;
+    }
+    aggregation[category] += value;
   });
 
-  data = filteredCheckBoxData;
+  // Convert to arrays for Chart.js
+  return {
+    labels: Object.keys(aggregation),
+    values: Object.values(aggregation),
+  };
+}
 
-  if (!data || data.length === 0) {
-    alert("No valid data available for visualization.");
-    return;
-  }
+const backgroundColors = [
+  "rgba(75, 192, 192, 0.6)",
+  "rgba(255, 99, 132, 0.6)",
+  "rgba(255, 206, 86, 0.6)",
+  "rgba(153, 102, 255, 0.6)",
+  "rgba(54, 162, 235, 0.6)",
+  "rgba(255, 159, 64, 0.6)",
+  "rgba(199, 199, 199, 0.6)",
+  "rgba(255, 205, 86, 0.6)",
+  "rgba(201, 203, 207, 0.6)",
+];
 
-  // Update the dropdown with the detected chart type
-  updateChartTypeDropdown(chartType);
+const borderColors = backgroundColors.map((c) => c.replace("0.6", "1"));
 
-  const columnNames = Object.keys(data[0]);
-
-  // Detect numeric and categorical columns
-  const numericColumns = columnNames.filter((col) =>
-    data.some((row) => row[col] && !isNaN(parseFloat(row[col])))
-  );
-  const categoricalColumns = columnNames.filter((col) =>
-    data.some((row) => row[col] && isNaN(parseFloat(row[col])))
-  );
-
-  // Store globally for reset functionality
-  globalNumericColumns = numericColumns;
-  globalCategoricalColumns = categoricalColumns;
-
-  console.log("Numeric Columns: ", numericColumns);
-  console.log("Categorical Columns: ", categoricalColumns);
-
-  let labels = [];
-  let filteredData = [];
-
-  // Handle pie chart
-  if (chartType === "pie") {
-    if (categoricalColumns.length !== 1 || numericColumns.length !== 1) {
-      alert("Pie charts require exactly 1 categorical and 1 numerical column.");
-      return;
-    }
-  }
-  // Handle scatter plot
-  else if (chartType === "scatter") {
-    if (numericColumns.length !== 2 || categoricalColumns.length > 0) {
-      alert(
-        "Scatter plots require exactly two numeric columns and no categorical columns."
-      );
-      return;
-    }
-  }
-  // Handle bar and line charts
-  else if (chartType === "bar" || chartType === "line") {
-    if (numericColumns.length === 0 || categoricalColumns.length === 0) {
-      alert(
-        "Bar/line charts require at least 1 numerical and 1 categorical column."
-      );
-      return;
-    }
-  }
-
-  // Process data rows for filtered data
-  for (let row of data) {
-    const categoryValue = row[categoricalColumns[0]]?.trim();
-    const isValidCategory = categoryValue && categoryValue !== "";
-
-    // Ensure all values in numeric columns are valid numbers
-    const isValidNumeric = numericColumns.every((col) => {
-      const value = row[col];
-      // Ensure value exists, is not undefined or null, and is a valid number
-      return value !== undefined && value !== null && !isNaN(parseFloat(value));
-    });
-
-    // Special handling for scatter plot (requires exactly 2 numeric columns)
-    if (chartType === "scatter" && numericColumns.length === 2) {
-      // If both numeric columns are valid, add to the data
-      const isValidScatter = numericColumns.every((col) => {
-        const value = row[col];
-        return (
-          value !== undefined && value !== null && !isNaN(parseFloat(value))
-        );
-      });
-
-      // If valid, process the row for the scatter plot
-      if (isValidScatter) {
-        filteredData.push(row); // Add to filtered data for scatter
-      }
-    }
-
-    // Handling for Pie/Bar/Line charts (categorical + numeric validation)
-    else if (
-      (chartType === "pie" && isValidCategory) || // For Pie chart, valid category title
-      (chartType !== "pie" && isValidNumeric) // For other charts, valid numeric data
-    ) {
-      // Process for Pie/Bar/Line charts
-      const processedRow = {};
-
-      Object.keys(row).forEach((key) => {
-        if (key === categoricalColumns[0] && !isValidCategory) {
-          processedRow[key] = "N/A"; // Replace empty category with 'N/A'
-        } else {
-          processedRow[key] =
-            row[key] === undefined || row[key] === null ? "N/A" : row[key];
-        }
-      });
-
-      // Add to filtered data for Pie/Bar/Line charts
-      labels.push(processedRow[categoricalColumns[0]] || "N/A");
-      filteredData.push(processedRow);
-    }
-  }
-
-  const datasets = [];
-
-  // Pie chart setup
-  if (chartType === "pie") {
-    datasets.push({
-      label: categoricalColumns[0],
-      data: filteredData.map((row) => parseFloat(row[numericColumns[0]]) || 0),
-      backgroundColor: filteredData.map(() => getRandomColor()),
-    });
-  }
-  // Scatter plot setup
-  else if (chartType === "scatter") {
-    datasets.push({
-      label: `Numeric Variable Comparison`,
-      data: filteredData.map((row) => ({
-        x: parseFloat(row[numericColumns[0]]),
-        y: parseFloat(row[numericColumns[1]]),
-      })),
-      backgroundColor: getRandomColor(),
-      borderWidth: 1,
-      fill: false,
-    });
-
-    labels = filteredData.map((row) => row[numericColumns[0]]);
-  }
-  // Bar/Line chart setup
-  else if (chartType === "bar" || chartType === "line") {
-    if (numericColumns.length === 2 && categoricalColumns.length === 0) {
-      // Handle case for 2 numeric columns only
-      datasets.push({
-        label: `Numeric Variable Comparison`,
-        data: filteredData.map((row) => ({
-          x: parseFloat(row[numericColumns[0]]),
-          y: parseFloat(row[numericColumns[1]]),
-        })),
-        backgroundColor: chartType === "bar" ? getRandomColor() : "transparent",
-        borderColor: chartType === "line" ? getRandomColor() : "transparent",
-        borderWidth: chartType === "line" ? 2 : 1,
-        fill: false,
-        tension: chartType === "line" ? 0.1 : 0,
-      });
-
-      labels = filteredData.map((row) => row[numericColumns[0]]);
+function getChartLabels(config, data) {
+  if (config.type === "bar" || config.type === "pie") {
+    if (config.horizontal) {
+      return aggregateDataByCategory(data, config.y, config.x).labels;
     } else {
-      // Handle multiple numeric columns for bar/line charts
-      numericColumns.forEach((numCol) => {
-        datasets.push({
-          label: numCol,
-          data: filteredData.map((row) => parseFloat(row[numCol]) || 0),
-          backgroundColor:
-            chartType === "bar" ? getRandomColor() : "transparent",
-          borderColor: chartType === "line" ? getRandomColor() : "transparent",
-          borderWidth: chartType === "line" ? 2 : 1,
-          fill: false,
-          tension: chartType === "line" ? 0.1 : 0,
-        });
-      });
+      return aggregateDataByCategory(
+        data,
+        config.x || config.labels,
+        config.y || config.values
+      ).labels;
+    }
+  } else if (config.type === "line") {
+    return data.map((row) => row[config.x]);
+  }
+  return [];
+}
 
-      labels = filteredData.map((row) => row[categoricalColumns[0]]);
+function getChartValues(config, data) {
+  if (config.type === "bar" || config.type === "pie") {
+    if (config.horizontal) {
+      return aggregateDataByCategory(data, config.y, config.x).values;
+    } else {
+      return aggregateDataByCategory(
+        data,
+        config.x || config.labels,
+        config.y || config.values
+      ).values;
+    }
+  } else if (config.type === "line") {
+    return data.map((row) => parseFloat(row[config.y]) || 0);
+  }
+  return [];
+}
+
+function renderSlideChart(index, onCompleteCallback) {
+  console.log("Rendering slide", index, lastUsedConfigs[index]);
+  const config = lastUsedConfigs[index];
+  const canvas = document.getElementById("slide-canvas");
+  const ctx = canvas.getContext("2d");
+
+  // Destroy previous chart
+  if (currentChartInstance) {
+    try {
+      console.log(
+        "Destroying chart of type:",
+        currentChartInstance.config.type
+      );
+      currentChartInstance.destroy();
+      console.log("Destroyed previous chart instance");
+    } catch (e) {
+      console.warn("Error destroying previous chart instance:", e);
     }
   }
 
-  if (currentChart) {
-    currentChart.destroy();
+  let labels, values;
+
+  if (config.preaggregated) {
+    labels = config.x;
+    values = config.y;
+  } else {
+    labels = getChartLabels(config, lastUsedData);
+    values = getChartValues(config, lastUsedData);
   }
 
-  try {
-    const chartContext = document
-      .getElementById("chart-container")
-      .getContext("2d");
+  // Ensure numeric conversion for values
+  const numericValues = values.map((v) => {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+      const cleaned = v.replace(/,/g, "").trim();
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? 0 : n;
+    }
+    return Number(v) || 0;
+  });
 
-    currentChart = new Chart(chartContext, {
-      type: chartType,
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales:
-          chartType !== "pie"
-            ? {
-                x: {
-                  ticks: {
-                    color: "black",
-                    font: {
-                      size: 12,
-                      family: "Leelawadee",
-                    },
-                  },
-                  display: true,
-                  title: {
-                    display: true,
-                    text:
-                      xAxisTitle ||
-                      (chartType === "scatter"
-                        ? numericColumns[0]
-                        : categoricalColumns[0] || `${numericColumns[0]}`),
-                    font: {
-                      size: 12,
-                      family: "Leelawadee",
-                    },
-                  },
-                },
-                y: {
-                  ticks: {
-                    color: "black",
-                    font: {
-                      size: 12,
-                      family: "Leelawadee",
-                    },
-                  },
-                  title: {
-                    display: true,
-                    text:
-                      yAxisTitle ||
-                      (chartType === "scatter"
-                        ? numericColumns[1]
-                        : numericColumns.length === 2 &&
-                          categoricalColumns.length === 0
-                        ? numericColumns[1]
-                        : "Values"),
-                    font: {
-                      size: 12,
-                      family: "Leelawadee",
-                    },
-                  },
-                },
-              }
-            : {},
-        plugins: {
-          title: {
-            display: true, // Enable the title
-            text: chartTitle, // Use the stored chart title
-            font: {
-              size: 20,
-              weight: "bold",
-              family: "Leelawadee",
-            },
-          },
-          legend: {
-            position: "top",
-            labels: {
-              color: "black",
-              font: {
-                size: 12,
-                family: "Leelawadee",
-              },
-            },
-          },
-          tooltip: {
-            bodyFont: { size: 12, family: "Leelawadee" }, // Tooltip text font
-            titleFont: { size: 14, family: "Leelawadee", weight: "bold" }, // Tooltip title font
-            callbacks: {
-              label: function (tooltipItem) {
-                return `${tooltipItem.dataset.label}: ${tooltipItem.raw}`;
-              },
-            },
-          },
+  const chartData = {
+    labels,
+    datasets: [
+      {
+        label: config.y || config.values || config.title,
+        data: numericValues,
+        backgroundColor:
+          config.type === "pie" ? backgroundColors : getColor(index),
+        borderColor:
+          config.type === "pie" ? borderColors : getColor(index, true),
+        borderWidth: 1,
+        fill: false,
+      },
+    ],
+  };
+
+  console.log("Creating new chart of type:", config.type);
+
+  currentChartInstance = new Chart(ctx, {
+    type: config.horizontal ? "bar" : config.type,
+    data: chartData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: {
+        duration: 800,
+        easing: "easeOutQuart",
+        onComplete: () => {
+          console.log("Chart animation completed");
+          // call onCompleteCallback if provided (used for exporting)
+          if (typeof onCompleteCallback === "function") {
+            requestAnimationFrame(() => onCompleteCallback());
+          }
         },
       },
-    });
-  } catch (error) {
-    console.error("Failed to create chart:", error);
-  }
+      indexAxis: config.horizontal ? "y" : "x",
+      scales:
+        config.type === "bar" || config.type === "line"
+          ? {
+              x: { ticks: { autoSkip: true, maxTicksLimit: 20 } },
+              y: config.horizontal
+                ? { ticks: { autoSkip: false } }
+                : { beginAtZero: true },
+            }
+          : {},
+      plugins: {
+        legend: {
+          display: true,
+          position: config.type === "pie" ? "right" : "top",
+        },
+      },
+    },
+  });
+
+  // Build insights and UI
+  const insights = generateInsights(config, lastUsedData);
+  document.getElementById("slide-insights").innerHTML = `
+    <h3>Insights</h3>
+    <ul>${insights.map((item) => `<li>${item}</li>`).join("")}</ul>
+  `;
+
+  // Set title & counter
+  document.getElementById("slide-title").textContent =
+    config.title || `Chart ${index + 1}`;
+  document.getElementById("slide-counter").textContent = `${index + 1} / ${
+    lastUsedConfigs.length
+  }`;
+
+  console.log("New chart rendered:", config.title || `Chart ${index + 1}`);
 }
 
-function updateChartTypeDropdown(chartType) {
-  const dropdown = document.getElementById("chart-type");
-  // Set the dropdown value to the detected chart type
-  dropdown.value = chartType;
+// Helper functions
+function getOrdinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-// Listen for changes to the chart type and regenerate the chart accordingly
-document.getElementById("chart-type").addEventListener("change", function () {
-  isManualOverride = true;
-  if (parsedData) {
-    generateChart(parsedData); // Generate a new chart with the selected type
-  }
-});
+function monthName(index) {
+  return new Date(2020, index, 1).toLocaleString("en-US", { month: "long" });
+}
 
-// Function to generate a random color
-function getRandomColor() {
-  const letters = "0123456789ABCDEF";
-  let color = "#";
-  for (let i = 0; i < 6; i++) {
-    color += letters[Math.floor(Math.random() * 16)];
+// Parses a label into a date
+function parseDateLabel(label, { defaultMMDD = true } = {}) {
+  if (!label && label !== 0) return null;
+  if (label instanceof Date)
+    return new Date(label.getFullYear(), label.getMonth(), label.getDate());
+  const s = String(label).trim();
+
+  // 1) YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD (take first Y-M-D chunk)
+  let m = s.match(/^(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})/);
+  if (m) {
+    const y = +m[1],
+      mo = +m[2],
+      d = +m[3];
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(y, mo - 1, d);
   }
-  return color;
+
+  // 2) D/M/Y or M/D/Y (numeric, separators - / .)
+  m = s.match(/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{2,4})$/);
+  if (m) {
+    let a = +m[1],
+      b = +m[2],
+      c = +m[3];
+    if (c < 100) c += c < 50 ? 2000 : 1900;
+    if (a > 31 || b > 31) return null;
+    if (a > 12 && b <= 12) {
+      // a is day -> DD/MM/YYYY
+      return new Date(c, b - 1, a);
+    } else if (b > 12 && a <= 12) {
+      // b is day -> MM/DD/YYYY
+      return new Date(c, a - 1, b);
+    } else {
+      // ambiguous - use defaultMMDD flag
+      if (defaultMMDD) return new Date(c, a - 1, b);
+      else return new Date(c, b - 1, a);
+    }
+  }
+
+  // 3) Month name formats (e.g. "Aug 9 2023", "9 Aug 2023", "September 01, 2023")
+  m = s.match(/([A-Za-z]+)\s+(\d{1,2})(?:[,\s]+(\d{4}))?/); // "Aug 9 2023"
+  if (m) {
+    const monthStr = m[1].slice(0, 3).toLowerCase();
+    const months = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
+    };
+    if (months.hasOwnProperty(monthStr)) {
+      const day = +m[2],
+        year = m[3] ? +m[3] : new Date().getFullYear();
+      return new Date(year, months[monthStr], day);
+    }
+  }
+
+  m = s.match(/^(\d{1,2})\s+([A-Za-z]+)(?:[,\s]+(\d{4}))?$/);
+  if (m) {
+    const day = +m[1],
+      monthStr = m[2].slice(0, 3).toLowerCase(),
+      year = m[3] ? +m[3] : new Date().getFullYear();
+    const months = {
+      jan: 0,
+      feb: 1,
+      mar: 2,
+      apr: 3,
+      may: 4,
+      jun: 5,
+      jul: 6,
+      aug: 7,
+      sep: 8,
+      oct: 9,
+      nov: 10,
+      dec: 11,
+    };
+    if (months.hasOwnProperty(monthStr))
+      return new Date(year, months[monthStr], day);
+  }
+
+  // 4) fallback to Date.parse, then normalize to local y/m/d
+  const parsed = Date.parse(s);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  return null;
+}
+
+function isLikelyPlaceLabel(label) {
+  if (!label) return false;
+  const s = String(label).trim();
+
+  // Comma-separated (City, ST or City, Country)
+  if (/,/.test(s)) return true;
+
+  // Common place words
+  if (
+    /\b(city|state|province|county|district|region|island|town|village|municipality|borough|shire)\b/i.test(
+      s
+    )
+  ) {
+    return true;
+  }
+
+  // Compass directions (standalone or followed by place words)
+  if (/^(north|south|east|west)$/i.test(s)) return true;
+  if (/^(north|south|east|west)\s+(region|district|side|area|zone)$/i.test(s))
+    return true;
+
+  // Trailing two-letter state/province code
+  if (/[A-Za-z\s]+[,\s]+[A-Z]{2}$/.test(s)) return true;
+
+  return false;
+}
+
+function formatDateLabel(label, options = {}) {
+  const { defaultMMDD = true } = options;
+  const d = parseDateLabel(label, { defaultMMDD });
+  if (!d) return label;
+  const day = d.getDate();
+  const month = monthName(d.getMonth());
+  return `${getOrdinal(day)} ${month}`;
+}
+
+function getLabelPreamble(label, options = {}) {
+  const { defaultMMDD = true } = options;
+  if (parseDateLabel(label, { defaultMMDD })) {
+    return "on " + formatDateLabel(label, { defaultMMDD });
+  }
+  if (isLikelyPlaceLabel(label)) {
+    return "in " + label;
+  }
+  // default = product/object/category
+  return "for " + label;
+}
+
+function generateInsights(config, data) {
+  const insights = [];
+  let labels, values;
+
+  if (config.preaggregated) {
+    labels = config.x;
+    values = config.y;
+  } else {
+    labels = getChartLabels(config, data);
+    values = getChartValues(config, data);
+  }
+
+  if (!labels || !values || !labels.length || !values.length) return insights;
+
+  // Helper for outlier detection using IQR method
+  function findOutliers(arr) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor(sorted.length / 4)];
+    const q3 = sorted[Math.floor((sorted.length * 3) / 4)];
+    const iqr = q3 - q1;
+    const lowerBound = q1 - 1.5 * iqr;
+    const upperBound = q3 + 1.5 * iqr;
+    return arr
+      .map((v, i) => (v < lowerBound || v > upperBound ? i : -1))
+      .filter((i) => i !== -1);
+  }
+
+  if (config.type === "pie") {
+    const total = values.reduce((sum, val) => sum + val, 0);
+    const percentages = values.map((val) => (val / total) * 100);
+
+    // Largest contributor
+    const max = Math.max(...values);
+    const maxIndex = values.indexOf(max);
+    insights.push(
+      `🏆 <strong>${
+        labels[maxIndex]
+      }</strong> is the largest contributor at <strong>${percentages[
+        maxIndex
+      ].toFixed(1)}%</strong>.`
+    );
+
+    // Balance / imbalance
+    const dominantThreshold = 30;
+    if (percentages[maxIndex] > dominantThreshold) {
+      insights.push(
+        `⚖️ The distribution is skewed heavily towards <strong>${labels[maxIndex]}</strong>.`
+      );
+    } else {
+      insights.push(
+        `⚖️ The pie chart shows a fairly balanced distribution across categories.`
+      );
+    }
+
+    // Three smallest segments
+    const segmentsWithPct = labels.map((label, i) => ({
+      label,
+      pct: percentages[i],
+    }));
+    segmentsWithPct.sort((a, b) => a.pct - b.pct);
+    const smallestThree = segmentsWithPct.slice(0, 3);
+    const smallestSum = smallestThree.reduce((acc, seg) => acc + seg.pct, 0);
+
+    if (smallestSum < 15) {
+      const segmentNames = smallestThree
+        .map((seg) => `<strong>${seg.label}</strong>`)
+        .join(", ");
+      insights.push(
+        `🔍 The three smallest segments (${segmentNames}) together contribute only <strong>${smallestSum.toFixed(
+          1
+        )}%</strong>.`
+      );
+    }
+
+    // Minor segments (below 5%)
+    const minorSegments = segmentsWithPct.filter((seg) => seg.pct < 5);
+    if (minorSegments.length > 0) {
+      const minorNames = minorSegments
+        .map((seg) => `<strong>${seg.label}</strong>`)
+        .join(", ");
+      insights.push(
+        `⚠️ There are <strong>${minorSegments.length}</strong> minor segments (${minorNames}) below 5% that might be grouped.`
+      );
+    }
+
+    return insights;
+  }
+
+  // For bar and line charts
+  if (Array.isArray(values)) {
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+
+    const maxIndex = values.indexOf(max);
+    const minIndex = values.indexOf(min);
+
+    // Existing peaks and lows
+    insights.push(
+      `📈 Sales peaked ${getLabelPreamble(
+        labels[maxIndex]
+      )}, reaching an all-time high of <strong>${max}</strong>.`
+    );
+    insights.push(
+      `📉 Sales had a sharp decline ${getLabelPreamble(
+        labels[minIndex]
+      )}, dropping to <strong>${min}</strong>.`
+    );
+    insights.push(
+      `📊 Sales averaged about <strong>${avg.toFixed(
+        2
+      )}</strong> over the period.`
+    );
+
+    // Trends & Changes
+    let increasingCount = 0,
+      decreasingCount = 0;
+    for (let i = 1; i < values.length; i++) {
+      if (values[i] > values[i - 1]) increasingCount++;
+      else if (values[i] < values[i - 1]) decreasingCount++;
+    }
+    if (increasingCount === values.length - 1) {
+      insights.push("📈 Sales increased steadily over the period.");
+    } else if (decreasingCount === values.length - 1) {
+      insights.push("📉 Sales decreased steadily over the period.");
+    } else if (increasingCount > decreasingCount) {
+      insights.push(
+        "📈 Overall, sales showed an upward trend with some fluctuations."
+      );
+    } else if (decreasingCount > increasingCount) {
+      insights.push(
+        "📉 Overall, sales showed a downward trend with some fluctuations."
+      );
+    } else {
+      insights.push(
+        "⚖️ Sales fluctuated throughout the period without a clear trend."
+      );
+    }
+
+    // Outliers detection
+    const outlierIndexes = findOutliers(values);
+    if (outlierIndexes.length) {
+      const outlierLabels = outlierIndexes.map((i) => labels[i]);
+      insights.push(`⚠️ Outliers detected at ${outlierLabels.join(", ")}.`);
+    }
+  }
+
+  return insights;
+}
+
+function getColor(index, border = false) {
+  const colors = [
+    "rgba(75, 192, 192, 0.6)",
+    "rgba(255, 99, 132, 0.6)",
+    "rgba(255, 206, 86, 0.6)",
+    "rgba(153, 102, 255, 0.6)",
+  ];
+  const borders = [
+    "rgba(75, 192, 192, 1)",
+    "rgba(255, 99, 132, 1)",
+    "rgba(255, 206, 86, 1)",
+    "rgba(153, 102, 255, 1)",
+  ];
+  return border
+    ? borders[index % borders.length]
+    : colors[index % colors.length];
 }
 
 // Get modal element and the help button
@@ -1131,3 +1056,9 @@ window.onclick = function (event) {
     modal.style.display = "none";
   }
 };
+
+window.addEventListener("resize", () => {
+  if (lastUsedConfigs.length && lastUsedData.length) {
+    renderSlideChart(currentSlideIndex);
+  }
+});
