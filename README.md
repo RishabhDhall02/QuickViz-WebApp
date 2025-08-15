@@ -36,7 +36,7 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
 
 ## How to Use
 
-1. Download and unzip the HTML, CSS, JS and font files
+1. Download and unzip the Favion, HTML, CSS, JS and font files
 2. On the landing page, drag-and-drop or upload your CSV dataset (the tool expects valid UTF-8 CSV with headers on the first row)
 3. The site will display a few visualizations and key insights which you can navigate through
 4. You can either re-upload or export the visualizations (Export feature is currently being worked on!)
