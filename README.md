@@ -1,54 +1,60 @@
-# QuickViz - WebApp (Ongoing and Undergoing Rework)
+# QuickViz - WebApp (Ongoing)
 
-A dynamic web application that automatically generates the most suitable data visualization chart from your uploaded datasets (CSV, JSON, XLSX). It provides insightful summaries including mean, median, mode, and outlier detection to help users quickly understand their data. You can customize your chart's title and axis titles, switch between chart types, and export your data and charts with ease.
+QuickViz is a lightweight data visualization tool that enables users to drag and drop or upload CSV sales-related datasets and automatically generates interactive charts with insights. It also offers export options for sharing your visualizations in PDF or PPTX formats.
 
 ---
 
 ## Features
 
-- Auto-detects the best chart type based on your dataset's columns
-- Supports CSV, JSON and XLSX file formats
-- Displays summary statistics: Mean, Median, Mode, Outliers
-- Allows customization of chart title and axis labels
-- Switch between line, bar, pie, and scatter charts
-- Export dataset as CSV and charts as JPEG images
-- User-friendly interface with planned features for drag-and-drop uploads and annotations
+- **Automated Chart Generation**  
+  Creates multiple visualizations based on the data:
+  - **Line chart**: Monthly aggregated "Sales Over Time"
+  - **Bar chart**: Sales by top-level category (e.g., Product Category, Region)
+  - **Horizontal bar chart**: For long or numerous categorical labels
+  - **Pie chart**: Distribution of sales across top categories
+
+- **Dynamic Data Profiling**
+  - Auto-detects column types: date, numeric, categorical, or text
+  - Filters out identifier-like columns (e.g., `Order ID`, names) to avoid clutter
+
+- **Monthly Data Aggregation**
+  - Automatically groups date-based data into month+year bins for smoother line charts
+
+- **Insights Engine**
+  - Generates key insights for each chart:
+    - Peak and low points, trends, averages
+    - Outliers and stability commentary
+    - Pie-chart specifics: dominant segments, minor groups, balance
+
+- **Responsive UI**
+  - Three-part layout:  
+    1. Upload interface  
+    2. Interactive chart slideshow with navigation  
+    3. Export panel (currently being worked on)
 
 ---
 
 ## How to Use
 
-1. Upload your dataset (CSV, JSON or XLSX)
-2. The website automatically generates the most suitable chart
-3. View dataset description and summary statistics
-4. Customize chart title and axis labels if desired
-5. Switch chart types to explore your data differently
-6. Export your dataset or chart for sharing or reporting
-
----
-
-## Supported Chart Restrictions
-
-- **Bar Chart:** 1 categorical column + 1 or more numeric columns. Best for comparisons.
-- **Line Chart:** 1 categorical column + 1 or more numeric columns. Best for trends.
-- **Scatter Plot:** 2 numeric columns. Best for relationships/distribution.
-- **Pie Chart:** 1 categorical column + 1 numeric column. Limited to first 10 categories to avoid cluster.
+1. On the landing page, drag-and-drop or upload your CSV dataset (the tool expects valid UTF-8 CSV with headers on the first row)
+2. The site will display a few visualizations and key insights which you can navigate through
+3. You can either re-upload or export the visualizations (Export feature is currently being worked on!)
 
 ---
 
 ## Future Plans
 
-- Annotation tools for charts
-- Selective data display adjustments
-- UI improvements for enhanced usability
-- Predictive analytics for forecasting trends
+- **Improved CSV Data Handling and Parsing**
+- **Functional Export Options (PDF and PPTX)**
+- **Further UI Enhancements**
+- **Adding a loading screen for larger datasets**
 
 ---
 
 ## Technologies Used
 
 - HTML, CSS, JavaScript for frontend
-- Libraries: Chart.js, PapaParse (for CSV parsing), XLSX.js (for Excel)
+- Libraries: Chart.js, PapaParse (for CSV parsing), xlsx (for Excel parsing), PptxGenJS (for exporting PPT files), jsPDF (for exporting PDF files)
 
 ---
 
