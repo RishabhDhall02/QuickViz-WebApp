@@ -4,7 +4,7 @@ let lastUsedData = [];
 let currentSlideIndex = 0;
 let currentChartInstance = null;
 
-// Function to trigger the brief disappear-reappear effect
+// Function to trigger the brief disappear-reappear effects
 function showErrorMessage(errorElement, message, otherErrorElement) {
   otherErrorElement.textContent = "";
   errorElement.style.opacity = "0"; // Hide briefly
