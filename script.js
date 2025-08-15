@@ -260,6 +260,21 @@ document.getElementById("export-pdf").addEventListener("click", exportPDF);
 // Export to PPT
 document.getElementById("export-ppt").addEventListener("click", exportPPT);
 
+// Helper: Checks if dataset is sales-related
+function isSalesDataset(headers) {
+  const salesKeywords = [
+    "sales",
+    "revenue",
+    "profit",
+    "quantity",
+    "amount",
+    "units",
+  ];
+  return headers.some((header) =>
+    salesKeywords.some((keyword) => header.toLowerCase().includes(keyword))
+  );
+}
+
 // Parses the CSV
 function parseCSV(content) {
   console.log("Parsing CSV content...");
@@ -272,6 +287,14 @@ function parseCSV(content) {
 
       if (results.data.length === 0) {
         alert("The CSV file is empty or invalid.");
+        return;
+      }
+
+      const headers = Object.keys(results.data[0]);
+      if (!isSalesDataset(headers)) {
+        alert(
+          "This file does not appear to contain sales-related data. Please upload a sales dataset."
+        );
         return;
       }
 
@@ -300,7 +323,7 @@ function parseCSV(content) {
       renderSlideChart(currentSlideIndex);
     },
     error: function (error) {
-      console.error("Error parsing CSV: ", error); // Log errors if any
+      console.error("Error parsing CSV: ", error);
     },
   });
 }
