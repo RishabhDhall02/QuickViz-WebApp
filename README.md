@@ -1,6 +1,6 @@
 # QuickViz - WebApp (Ongoing)
 
-QuickViz is a lightweight data visualization tool that enables users to drag and drop or upload CSV sales-related datasets and automatically generates interactive charts with insights. It also offers export options for sharing your visualizations in PDF or PPTX formats.
+QuickViz is a lightweight data visualization tool that enables users to drag and drop or upload CSV sales-related datasets and automatically generates interactive charts with insights.
 
 ---
 
@@ -10,7 +10,6 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
   Creates multiple visualizations based on the data:
   - **Line chart**: Monthly aggregated "Sales Over Time"
   - **Bar chart**: Sales by top-level category (e.g., Product Category, Region)
-  - **Horizontal bar chart**: For long or numerous categorical labels
   - **Pie chart**: Distribution of sales across top categories
 
 - **Dynamic Data Profiling**
@@ -39,14 +38,13 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
 1. Download and unzip the Favicon, HTML, CSS, JS and font files
 2. On the landing page, drag-and-drop or upload your CSV dataset (the tool expects valid UTF-8 CSV with headers on the first row)
 3. The site will display a few visualizations and key insights which you can navigate through
-4. You can either re-upload or export the visualizations (Export feature is currently being worked on!)
+4. You can also re-upload the file or upload a different one instead.
 
 ---
 
 ## Future Plans
 
 - **Improved CSV Data Handling and Parsing**
-- **Functional Export Options (PDF and PPTX)**
 - **Further UI Enhancements**
 - **Adding a loading screen for larger datasets**
 
