@@ -213,11 +213,6 @@ function isSalesDataset(rows) {
   return false;
 }
 
-/* -------------------------
-   parseCSV (replace your existing)
-   - Uses isSalesDataset (rows), creates profile -> selectCharts(profile, rows)
-   - Ensures small sample accepted; shows message when no charts generated
-   ------------------------- */
 function parseCSV(content) {
   console.log("Parsing CSV content...");
 
@@ -462,7 +457,7 @@ function selectChartsAggregated(profile, data) {
         insight: "Category-wise contribution to overall sales",
       });
 
-      // Also push a pie for distribution (preaggregated)
+      // Push a pie for distribution (preaggregated)
       charts.push({
         type: "pie",
         title: `Sales Distribution by ${categoryCol}`,
@@ -475,7 +470,6 @@ function selectChartsAggregated(profile, data) {
 
   // 3) optional: profit vs sales (if Profit numeric)
   if (salesCol && numericCols.includes("Profit")) {
-    // if you want scatter removed, comment this block out. I'll convert to a simple bar of profit by category instead:
     const profitAgg = aggregateDataByCategory(
       data,
       categoryCol || "Category",
@@ -836,7 +830,6 @@ function renderAggregatedSlideChart(index, onCompleteCallback) {
 
   console.log("Creating aggregated chart of type:", config.type);
 
-  // Scatter removed: default to bar if scatter appears
   const chartType =
     config.type === "scatter" ? "bar" : config.horizontal ? "bar" : config.type;
 
@@ -1064,14 +1057,6 @@ function formatDateLabel(label) {
   return s;
 }
 
-/* -------------------------
-   Grammar: getLabelPreamble
-   - date => "on 9th August 2023" (uses parseDateLabel/formatDateLabel)
-   - month-year (e.g., "Jan 2023" or "2023-01") => "in Jan 2023"
-   - place => "in X"
-   - compass => "in X"
-   - otherwise => "for X"
-   ------------------------- */
 function getLabelPreamble(label) {
   if (label === undefined || label === null) return "";
   const s = String(label).trim();
