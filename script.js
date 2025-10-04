@@ -222,7 +222,11 @@ function parseCSV(content) {
     complete: function (results) {
       console.log("CSV parsed successfully: ", results);
 
-      if (results.data.length === 0) {
+      if (
+        !results ||
+        !Array.isArray(results.data) ||
+        results.data.length === 0
+      ) {
         alert("The CSV file is empty or invalid.");
         return;
       }
@@ -232,19 +236,28 @@ function parseCSV(content) {
       const profile = profileData(parsedData);
       console.log("Data profile:", profile);
 
+      // Choose aggregated vs simple charts
       if (shouldAggregate(parsedData)) {
-        lastUsedConfigs = selectChartsAggregated(profile, parsedData);
-        console.log("Using aggregated charts");
-        lastUsedData = parsedData;
-        currentSlideIndex = 0;
-        renderAggregatedSlideChart(currentSlideIndex);
+        lastUsedConfigs = selectChartsAggregated(profile, parsedData) || [];
+        console.log("Using aggregated charts:", lastUsedConfigs);
       } else {
-        lastUsedConfigs = selectChartsSimple(profile, parsedData);
-        console.log("Using simple charts");
-        lastUsedData = parsedData;
-        currentSlideIndex = 0;
-        renderSimpleSlideChart(currentSlideIndex);
+        lastUsedConfigs = selectChartsSimple(profile, parsedData) || [];
+        console.log("Using simple charts:", lastUsedConfigs);
       }
+
+      // If selectors failed to return anything, create a safe fallback:
+      if (!Array.isArray(lastUsedConfigs) || lastUsedConfigs.length === 0) {
+        console.warn(
+          "No chart configs returned by selectors — building fallback charts."
+        );
+        lastUsedConfigs = makeFallbackCharts(profile, parsedData);
+      }
+
+      lastUsedData = parsedData;
+      currentSlideIndex = 0;
+
+      // Use the unified renderer so delegation happens consistently
+      renderSlideChart(currentSlideIndex);
     },
     error: function (error) {
       console.error("Error parsing CSV: ", error); // Log errors if any
@@ -314,23 +327,21 @@ function profileData(data) {
     // First, check if all valid dates
     const allValidDates = nonEmpty.every((v) => parseDateLabel(v) !== null);
 
-    if (allValidDates) {
+    // Then check if all numeric
+    if (nonEmpty.every((v) => !isNaN(parseFloat(v)))) {
+      type = "numeric";
+      console.log(`Type decided: numeric (all values parse to numbers)`);
+    } else if (nonEmpty.every((v) => isValidDate(v))) {
       type = "date";
       console.log(`Type decided: date (all values are valid dates)`);
+    } else if (uniqueVals.length < values.length * 0.3) {
+      type = "categorical";
+      console.log(
+        `Type decided: categorical (unique vals less than 30% of total)`
+      );
     } else {
-      // Then check if all numeric
-      if (nonEmpty.every((v) => !isNaN(parseFloat(v)))) {
-        type = "numeric";
-        console.log(`Type decided: numeric (all values parse to numbers)`);
-      } else if (uniqueVals.length < values.length * 0.3) {
-        type = "categorical";
-        console.log(
-          `Type decided: categorical (unique vals less than 30% of total)`
-        );
-      } else {
-        type = "text";
-        console.log(`Type decided: text (default fallback)`);
-      }
+      type = "text";
+      console.log(`Type decided: text (default fallback)`);
     }
 
     profile[col] = {
@@ -490,11 +501,11 @@ function selectChartsAggregated(profile, data) {
   return charts;
 }
 
-function selectChartsSimple(profile) {
+function selectChartsSimple(profile, data) {
+  // Accepts profile, optional data (we ignore data most times)
   const chartsToRender = [];
 
   const columnNames = Object.keys(profile);
-
   const numericCols = columnNames.filter(
     (col) => profile[col].type === "numeric"
   );
@@ -503,7 +514,7 @@ function selectChartsSimple(profile) {
   );
   const dateCols = columnNames.filter((col) => profile[col].type === "date");
 
-  console.log("Profile inside selectCharts:", profile);
+  console.log("Profile inside selectChartsSimple:", profile);
 
   const likelySalesCol = findLikelySalesColumn(numericCols);
   console.log("Likely sales column:", likelySalesCol);
@@ -512,7 +523,7 @@ function selectChartsSimple(profile) {
   if (
     dateCols.length &&
     numericCols.length &&
-    profile[dateCols[0]].sampleValues.every((v) => isValidDate(v))
+    profile[dateCols[0]].sampleValues.every((v) => parseDateLabel(v) !== null)
   ) {
     chartsToRender.push({
       type: "line",
@@ -524,19 +535,20 @@ function selectChartsSimple(profile) {
 
   // 2. Bar chart: sales by category (e.g., by region/product)
   if (categoricalCols.length && numericCols.length) {
+    const cat = findLikelyCategoryColumn(categoricalCols);
     chartsToRender.push({
       type: "bar",
-      x: categoricalCols[0],
+      x: cat,
       y: likelySalesCol,
-      title: `Sales by ${categoricalCols[0]}`,
+      title: `Sales by ${cat}`,
     });
   }
 
-  // 3. Horizontal Bar chart: for long labels or many categories
+  // 3. Horizontal Bar chart for long label columns
   for (const col of categoricalCols) {
     const uniqueVals = profile[col].uniqueCount || 0;
     const maxLabelLength = Math.max(
-      ...profile[col].sampleValues.map((val) => val.length)
+      ...profile[col].sampleValues.map((val) => (val || "").length)
     );
 
     if ((uniqueVals >= 6 && uniqueVals <= 15) || maxLabelLength > 12) {
@@ -545,7 +557,7 @@ function selectChartsSimple(profile) {
         x: likelySalesCol,
         y: col,
         title: `Sales by ${col} (Horizontal)`,
-        horizontal: true, // custom flag
+        horizontal: true,
       });
       break;
     }
@@ -553,15 +565,17 @@ function selectChartsSimple(profile) {
 
   // 4. Pie chart: sales share by top category
   if (categoricalCols.length && numericCols.length) {
+    const cat = findLikelyCategoryColumn(categoricalCols);
     chartsToRender.push({
       type: "pie",
-      labels: categoricalCols[0],
+      labels: cat,
       values: likelySalesCol,
-      title: `Sales Distribution by ${categoricalCols[0]}`,
+      title: `Sales Distribution by ${cat}`,
     });
   }
 
-  console.log("Charts to render:", chartsToRender);
+  // final safety: if nothing added, return empty and let fallback handle it
+  console.log("Charts to render (simple):", chartsToRender);
   return chartsToRender;
 }
 
@@ -600,6 +614,7 @@ const backgroundColors = [
 const borderColors = backgroundColors.map((c) => c.replace("0.6", "1"));
 
 function getChartLabels(config, data) {
+  if (!config || typeof config.type !== "string") return [];
   if (config.type === "bar" || config.type === "pie") {
     if (config.horizontal) {
       return aggregateDataByCategory(data, config.y, config.x).labels;
@@ -617,6 +632,7 @@ function getChartLabels(config, data) {
 }
 
 function getChartValues(config, data) {
+  if (!config || typeof config.type !== "string") return [];
   if (config.type === "bar" || config.type === "pie") {
     if (config.horizontal) {
       return aggregateDataByCategory(data, config.y, config.x).values;
@@ -630,6 +646,52 @@ function getChartValues(config, data) {
   } else if (config.type === "line") {
     return data.map((row) => parseFloat(row[config.y]) || 0);
   }
+  return [];
+}
+
+// Minimal fallback: produce 1-2 sensible charts if selectors return none
+function makeFallbackCharts(profile, data) {
+  const cols = Object.keys(profile || {});
+  const numericCols = cols.filter((c) => profile[c].type === "numeric");
+  const categoricalCols = cols.filter((c) =>
+    ["categorical", "text"].includes(profile[c].type)
+  );
+
+  const fallback = [];
+
+  // If we have numeric + categorical, create a basic bar and pie
+  if (numericCols.length && categoricalCols.length) {
+    const sales = findLikelySalesColumn(numericCols);
+    const cat = findLikelyCategoryColumn(categoricalCols);
+
+    fallback.push({
+      type: "bar",
+      x: cat,
+      y: sales,
+      title: `Sales by ${cat} (Fallback)`,
+    });
+
+    fallback.push({
+      type: "pie",
+      labels: cat,
+      values: sales,
+      title: `Sales distribution by ${cat} (Fallback)`,
+    });
+    return fallback;
+  }
+
+  // If only numeric columns exist, show the first as a simple column summary
+  if (numericCols.length) {
+    fallback.push({
+      type: "bar",
+      x: numericCols[0],
+      y: numericCols[0],
+      title: `Values: ${numericCols[0]}`,
+    });
+    return fallback;
+  }
+
+  // No usable columns — return an empty array
   return [];
 }
 
@@ -669,31 +731,77 @@ function renderSlideChart(index, onCompleteCallback) {
 
 let chartInstance = [];
 
-// Replace your previous simple renderer with this exact function:
 function renderSimpleSlideChart(index) {
-  console.log("Rendering slide", index, lastUsedConfigs[index]);
+  console.log(
+    "renderSimpleSlideChart index:",
+    index,
+    "configs:",
+    lastUsedConfigs
+  );
+  if (!Array.isArray(lastUsedConfigs) || lastUsedConfigs.length === 0) {
+    console.warn("No chart configs available for simple renderer.");
+    // Clear canvas + show message
+    const canvas = document.getElementById("slide-canvas");
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    document.getElementById("slide-title").textContent =
+      "No charts could be generated";
+    document.getElementById("slide-insights").innerHTML =
+      "<h3>Insights</h3><ul><li>No eligible chart types found.</li></ul>";
+    document.getElementById("slide-counter").textContent = "0 / 0";
+    return;
+  }
+
   const config = lastUsedConfigs[index];
+  if (!config) {
+    console.error("Missing config at index", index, lastUsedConfigs);
+    // attempt a one-time regeneration from profile/data if parsedData exists
+    if (typeof parsedData !== "undefined" && parsedData && parsedData.length) {
+      const profile = profileData(parsedData);
+      const fallback = makeFallbackCharts(profile, parsedData);
+      if (fallback.length) {
+        lastUsedConfigs = fallback;
+        currentSlideIndex = 0;
+        return renderSimpleSlideChart(0);
+      }
+    }
+
+    // fallback UI
+    document.getElementById("slide-title").textContent = "No charts (error)";
+    document.getElementById("slide-insights").innerHTML =
+      "<h3>Insights</h3><ul><li>Unable to generate charts from this dataset.</li></ul>";
+    document.getElementById("slide-counter").textContent = "0 / 0";
+    return;
+  }
+
   const canvas = document.getElementById("slide-canvas");
   const ctx = canvas.getContext("2d");
 
   // Destroy previous chart if it exists
   if (currentChartInstance) {
-    console.log("Destroying chart of type:", currentChartInstance.config.type);
-    currentChartInstance.destroy();
-    console.log("Destroyed previous chart instance");
+    try {
+      console.log(
+        "Destroying chart of type:",
+        currentChartInstance.config?.type
+      );
+      currentChartInstance.destroy();
+      console.log("Destroyed previous chart instance");
+    } catch (e) {
+      console.warn("Error destroying existing chart:", e);
+    }
   }
 
   // Get labels & values safely
   let labels = getChartLabels(config, lastUsedData) || [];
   let values = getChartValues(config, lastUsedData) || [];
 
-  if (!Array.isArray(labels)) labels = Array.from(labels);
+  // normalize to arrays
+  if (!Array.isArray(labels)) labels = Array.from(labels || []);
   if (!Array.isArray(values)) {
-    if (values && typeof values === "object") {
-      values = Object.values(values);
-    } else {
-      values = Array.from(values || []);
-    }
+    if (values && typeof values === "object") values = Object.values(values);
+    else values = Array.from(values || []);
   }
 
   if (!labels.length || !values.length) {
@@ -705,10 +813,12 @@ function renderSimpleSlideChart(index) {
     document.getElementById("slide-counter").textContent = `${index + 1} / ${
       lastUsedConfigs.length
     }`;
+    // clear canvas
+    ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
 
-  // Ensure numeric conversion of values
+  // numeric conversion
   const numericValues = values.map((v) => {
     if (typeof v === "number") return v;
     if (typeof v === "string") {
@@ -727,37 +837,23 @@ function renderSimpleSlideChart(index) {
         label: config.y || config.values || config.title,
         data: numericValues,
         backgroundColor:
-          config.type === "pie"
-            ? backgroundColors
-            : getColor(currentSlideIndex),
+          config.type === "pie" ? backgroundColors : getColor(index),
         borderColor:
-          config.type === "pie"
-            ? borderColors
-            : getColor(currentSlideIndex, true),
+          config.type === "pie" ? borderColors : getColor(index, true),
         borderWidth: 1,
         fill: false,
       },
     ],
   };
 
-  console.log("Creating new chart of type:", config.type);
-
-  // Use horizontal bar if flagged
   const chartType = config.horizontal ? "bar" : config.type;
-
   currentChartInstance = new Chart(ctx, {
     type: chartType,
     data: chartData,
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      animation: {
-        duration: 800,
-        easing: "easeOutQuart",
-        onComplete: () => {
-          console.log("Chart animation completed");
-        },
-      },
+      animation: { duration: 600 },
       indexAxis: config.horizontal ? "y" : "x",
       scales:
         chartType === "bar" || chartType === "line"
@@ -768,6 +864,12 @@ function renderSimpleSlideChart(index) {
                 : { beginAtZero: true },
             }
           : {},
+      plugins: {
+        legend: {
+          display: true,
+          position: config.type === "pie" ? "right" : "top",
+        },
+      },
     },
   });
 
@@ -898,6 +1000,11 @@ function getOrdinal(n) {
 
 function monthName(index) {
   return new Date(2020, index, 1).toLocaleString("en-US", { month: "long" });
+}
+
+// Use parseDateLabel to check validity consistently
+function isValidDate(str) {
+  return parseDateLabel(str) !== null;
 }
 
 // Parses a label into a date
