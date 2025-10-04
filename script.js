@@ -132,7 +132,7 @@ document.getElementById("file-input").addEventListener("change", function () {
 });
 
 function showSection(idToShow) {
-  const sections = ["part-1", "part-2", "part-3"];
+  const sections = ["part-1", "part-2"];
   sections.forEach((id) => {
     const el = document.getElementById(id);
     if (id === idToShow) {
@@ -145,10 +145,6 @@ function showSection(idToShow) {
 
 document.getElementById("to-part-1").addEventListener("click", () => {
   showSection("part-1");
-});
-
-document.getElementById("to-part-3").addEventListener("click", () => {
-  showSection("part-3");
 });
 
 // Example: after successful upload
@@ -174,108 +170,54 @@ function captureChartImage(callback) {
   });
 }
 
-function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
-  let index = 0;
-
-  function processNextChart() {
-    if (index >= lastUsedConfigs.length) {
-      pdf.save("charts.pdf");
-      return;
-    }
-
-    renderSlideChart(index);
-
-    // Wait for chart render and capture
-    captureChartImage((imgData) => {
-      if (!imgData) {
-        console.warn("Skipping chart due to capture error.");
-        index++;
-        processNextChart();
-        return;
-      }
-
-      if (index > 0) pdf.addPage();
-      pdf.addImage(imgData, "PNG", 10, 10, 180, 100);
-
-      const insights = generateInsights(lastUsedConfigs[index], lastUsedData);
-      pdf.setFontSize(12);
-      pdf.text("Insights:", 10, 120);
-      insights.forEach((line, i) => {
-        pdf.text(`- ${line}`, 10, 130 + i * 8);
-      });
-
-      index++;
-      processNextChart();
-    });
-  }
-
-  processNextChart();
-}
-
-function exportPPT() {
-  const pptx = new PptxGenJS();
-  let index = 0;
-
-  function processNextChart() {
-    if (index >= lastUsedConfigs.length) {
-      pptx.writeFile("charts.pptx");
-      return;
-    }
-
-    renderSlideChart(index);
-
-    captureChartImage((imgData) => {
-      if (!imgData) {
-        console.warn("Skipping chart due to capture error.");
-        index++;
-        processNextChart();
-        return;
-      }
-
-      const slide = pptx.addSlide();
-      slide.addImage({ data: imgData, x: 0.5, y: 0.5, w: 8, h: 4.5 });
-
-      const insights = generateInsights(lastUsedConfigs[index], lastUsedData);
-      slide.addText("Insights:", { x: 0.5, y: 5.2, fontSize: 14, bold: true });
-      slide.addText(insights.map((i) => `• ${i}`).join("\n"), {
-        x: 0.5,
-        y: 5.5,
-        fontSize: 12,
-        color: "363636",
-      });
-
-      index++;
-      processNextChart();
-    });
-  }
-
-  processNextChart();
-}
-
-// Export to PDF
-document.getElementById("export-pdf").addEventListener("click", exportPDF);
-
-// Export to PPT
-document.getElementById("export-ppt").addEventListener("click", exportPPT);
-
-// Helper: Checks if dataset is sales-related
-function isSalesDataset(headers) {
+/* -------------------------
+   Helper: isSalesDataset
+   - Accepts dataset (rows array)
+   - Returns true when there's at least one sales-like numeric column
+   ------------------------- */
+function isSalesDataset(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return false;
+  const headers = Object.keys(rows[0] || {}).map((h) =>
+    (h || "").toString().trim().toLowerCase()
+  );
   const salesKeywords = [
+    "sale",
     "sales",
     "revenue",
     "profit",
-    "quantity",
     "amount",
+    "total",
+    "qty",
+    "quantity",
     "units",
+    "price",
   ];
-  return headers.some((header) =>
-    salesKeywords.some((keyword) => header.toLowerCase().includes(keyword))
-  );
+  // If any header contains a sales keyword -> accept
+  if (headers.some((h) => salesKeywords.some((k) => h.includes(k))))
+    return true;
+
+  // fallback: if any column is numeric in >50% rows, treat as numeric/sales-ish
+  for (const h of headers) {
+    let numericCount = 0,
+      checked = 0;
+    for (let i = 0; i < Math.min(rows.length, 30); i++) {
+      // sample up to 30 rows
+      const v = (rows[i] || {})[h];
+      if (v === null || v === undefined || v === "") continue;
+      checked++;
+      if (!isNaN(Number(String(v).replace(/,/g, "")))) numericCount++;
+    }
+    if (checked > 0 && numericCount / checked >= 0.6) return true;
+  }
+
+  return false;
 }
 
-// Parses the CSV
+/* -------------------------
+   parseCSV (replace your existing)
+   - Uses isSalesDataset (rows), creates profile -> selectCharts(profile, rows)
+   - Ensures small sample accepted; shows message when no charts generated
+   ------------------------- */
 function parseCSV(content) {
   console.log("Parsing CSV content...");
 
@@ -290,42 +232,46 @@ function parseCSV(content) {
         return;
       }
 
-      const headers = Object.keys(results.data[0]);
-      if (!isSalesDataset(headers)) {
-        alert(
-          "This file does not appear to contain sales-related data. Please upload a sales dataset."
-        );
-        return;
-      }
-
       parsedData = results.data; // Save parsed data globally
 
       const profile = profileData(parsedData);
       console.log("Data profile:", profile);
 
-      const chartConfigs = selectCharts(profile, parsedData);
-      console.log(
-        "Likely sales column:",
-        findLikelySalesColumn(Object.keys(profile))
-      );
-
-      lastUsedConfigs = chartConfigs;
-      lastUsedData = parsedData;
-      currentSlideIndex = 0;
-
-      if (!document.getElementById("slide-canvas")) {
-        console.error("slide-canvas element not found in DOM");
+      if (shouldAggregate(parsedData)) {
+        lastUsedConfigs = selectChartsAggregated(profile, parsedData);
+        console.log("Using aggregated charts");
+        lastUsedData = parsedData;
+        currentSlideIndex = 0;
+        renderAggregatedSlideChart(currentSlideIndex);
+      } else {
+        lastUsedConfigs = selectChartsSimple(profile, parsedData);
+        console.log("Using simple charts");
+        lastUsedData = parsedData;
+        currentSlideIndex = 0;
+        renderSimpleSlideChart(currentSlideIndex);
       }
-      if (!document.getElementById("slide-title")) {
-        console.error("slide-title element not found in DOM");
-      }
-
-      renderSlideChart(currentSlideIndex);
     },
     error: function (error) {
-      console.error("Error parsing CSV: ", error);
+      console.error("Error parsing CSV: ", error); // Log errors if any
     },
   });
+}
+
+function shouldAggregate(data) {
+  const dateCol = findLikelyDateColumn(data);
+  if (!dateCol) return false;
+  const dates = data
+    .map((row) => parseDateLabel(row[dateCol]))
+    .filter((d) => d !== null);
+  if (dates.length === 0) return false;
+  const minDate = new Date(Math.min(...dates));
+  const maxDate = new Date(Math.max(...dates));
+
+  // Aggregate only if multiple months/years are spanned
+  return (
+    minDate.getMonth() !== maxDate.getMonth() ||
+    minDate.getFullYear() !== maxDate.getFullYear()
+  );
 }
 
 document.getElementById("prev-slide").addEventListener("click", () => {
@@ -343,13 +289,6 @@ document.getElementById("next-slide").addEventListener("click", () => {
     renderSlideChart(currentSlideIndex);
   }
 });
-
-function renderChartsWrapper(configs, data) {
-  lastUsedConfigs = configs;
-  lastUsedData = data;
-  console.log("Rendering charts wrapper with configs:", configs);
-  renderCharts(configs, data);
-}
 
 function profileData(data) {
   const columns = Object.keys(data[0]); // Get column names from first row
@@ -450,99 +389,175 @@ function isIdentifierColumn(name) {
   );
 }
 
-function selectCharts(profile, data = lastUsedData) {
-  const chartsToRender = [];
-  const columnNames = Object.keys(profile);
+function findLikelyDateColumn(data) {
+  const sampleRow = data[0];
+  if (!sampleRow) return null;
 
-  const numericCols = columnNames.filter(
-    (col) => profile[col].type === "numeric"
+  for (const key of Object.keys(sampleRow)) {
+    if (key.toLowerCase().includes("date")) return key;
+  }
+  return null;
+}
+
+function selectChartsAggregated(profile, data) {
+  const charts = [];
+  if (!Array.isArray(data) || data.length === 0) return charts;
+
+  // compute useful cols correctly from profile
+  const numericCols = Object.keys(profile).filter(
+    (k) => profile[k].type === "numeric"
   );
-  let categoricalCols = columnNames.filter((col) =>
-    ["categorical", "text"].includes(profile[col].type)
+  const categoricalCols = Object.keys(profile).filter((k) =>
+    ["categorical", "text"].includes(profile[k].type)
   );
-  categoricalCols = categoricalCols.filter((c) => !isIdentifierColumn(c));
 
-  const likelySalesCol = findLikelySalesColumn(numericCols);
-  console.log("Likely sales column:", likelySalesCol);
+  const dateCol = findLikelyDateColumn(data);
+  const salesCol = findLikelySalesColumn(numericCols || []);
+  const categoryCol = findLikelyCategoryColumn(categoricalCols || []);
 
-  const categoryCol = findLikelyCategoryColumn(categoricalCols);
-
-  const dateCols = columnNames.filter((col) => profile[col].type === "date");
-  console.log("Profile inside selectCharts:", profile);
-
-  // 1. Line chart: sales over time (month+year grouping)
-  if (
-    dateCols.length &&
-    numericCols.length &&
-    likelySalesCol &&
-    profile[dateCols[0]].sampleValues.every((v) => parseDateLabel(v) !== null)
-  ) {
-    const dateCol = dateCols[0];
-    const salesCol = likelySalesCol;
-    const monthYearMap = {}; // key = "YYYY-MM" -> { label: "Jan 2024", total: N }
-
-    (data || []).forEach((row) => {
-      const raw = row[dateCol];
-      const dateObj = parseDateLabel(raw);
-      if (!dateObj) return;
-
-      const key = `${dateObj.getFullYear()}-${String(
-        dateObj.getMonth() + 1
-      ).padStart(2, "0")}`;
-      const label = `${dateObj.toLocaleString("default", {
+  // 1) Sales over time (grouped by Month-Year)
+  if (dateCol && salesCol) {
+    const monthMap = {}; // YYYY-MM -> { label: 'Jan 2023', total }
+    data.forEach((r) => {
+      const d = parseDateLabel(r[dateCol]);
+      if (!d) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}`;
+      const label = `${d.toLocaleString("default", {
         month: "short",
-      })} ${dateObj.getFullYear()}`;
-      const salesVal = parseFloat(row[salesCol]) || 0;
-
-      if (!monthYearMap[key]) monthYearMap[key] = { label, total: 0 };
-      monthYearMap[key].total += salesVal;
+      })} ${d.getFullYear()}`;
+      const val = parseFloat(String(r[salesCol] || "0").replace(/,/g, "")) || 0;
+      if (!monthMap[key]) monthMap[key] = { label, total: 0, dateObj: d };
+      monthMap[key].total += val;
     });
 
-    // Sort keys chronologically
-    const sortedKeys = Object.keys(monthYearMap).sort();
-    const groupedDates = sortedKeys.map((k) => monthYearMap[k].label);
-    const groupedValues = sortedKeys.map((k) => monthYearMap[k].total);
+    const keys = Object.keys(monthMap).sort(); // chronological
+    const labels = keys.map((k) => monthMap[k].label);
+    const values = keys.map((k) => monthMap[k].total);
 
-    if (groupedDates.length > 0) {
-      chartsToRender.push({
+    if (labels.length > 0) {
+      charts.push({
         type: "line",
-        x: groupedDates,
-        y: groupedValues,
         title: "Sales Over Time (Monthly)",
+        x: labels,
+        y: values,
+        preaggregated: true,
+        insight: "Sales trend across months/years",
+      });
+    }
+  }
+
+  // 2) Sales by product/category (pre-aggregate)
+  if (categoryCol && salesCol) {
+    const agg = aggregateDataByCategory(data, categoryCol, salesCol);
+    if (agg.labels.length) {
+      charts.push({
+        type: "bar",
+        title: "Sales by Product Category",
+        x: agg.labels,
+        y: agg.values,
+        preaggregated: true,
+        insight: "Category-wise contribution to overall sales",
+      });
+
+      // Also push a pie for distribution (preaggregated)
+      charts.push({
+        type: "pie",
+        title: `Sales Distribution by ${categoryCol}`,
+        x: agg.labels,
+        y: agg.values,
         preaggregated: true,
       });
     }
   }
 
-  // 2. Bar chart: sales by category
-  if (categoryCol && numericCols.length) {
+  // 3) optional: profit vs sales (if Profit numeric)
+  if (salesCol && numericCols.includes("Profit")) {
+    // if you want scatter removed, comment this block out. I'll convert to a simple bar of profit by category instead:
+    const profitAgg = aggregateDataByCategory(
+      data,
+      categoryCol || "Category",
+      "Profit"
+    );
+    if (profitAgg.labels.length) {
+      charts.push({
+        type: "bar",
+        title: "Profit by Category",
+        x: profitAgg.labels,
+        y: profitAgg.values,
+        preaggregated: true,
+        insight: "Profit contribution by category",
+      });
+    }
+  }
+
+  return charts;
+}
+
+function selectChartsSimple(profile) {
+  const chartsToRender = [];
+
+  const columnNames = Object.keys(profile);
+
+  const numericCols = columnNames.filter(
+    (col) => profile[col].type === "numeric"
+  );
+  const categoricalCols = columnNames.filter((col) =>
+    ["categorical", "text"].includes(profile[col].type)
+  );
+  const dateCols = columnNames.filter((col) => profile[col].type === "date");
+
+  console.log("Profile inside selectCharts:", profile);
+
+  const likelySalesCol = findLikelySalesColumn(numericCols);
+  console.log("Likely sales column:", likelySalesCol);
+
+  // 1. Line chart: sales over time (if date + numeric exist)
+  if (
+    dateCols.length &&
+    numericCols.length &&
+    profile[dateCols[0]].sampleValues.every((v) => isValidDate(v))
+  ) {
     chartsToRender.push({
-      type: "bar",
-      x: categoryCol,
+      type: "line",
+      x: dateCols[0],
       y: likelySalesCol,
-      title: `Sales by ${categoryCol}`,
+      title: "Sales Over Time",
     });
   }
 
-  // 3. Horizontal Bar chart
+  // 2. Bar chart: sales by category (e.g., by region/product)
+  if (categoricalCols.length && numericCols.length) {
+    chartsToRender.push({
+      type: "bar",
+      x: categoricalCols[0],
+      y: likelySalesCol,
+      title: `Sales by ${categoricalCols[0]}`,
+    });
+  }
+
+  // 3. Horizontal Bar chart: for long labels or many categories
   for (const col of categoricalCols) {
     const uniqueVals = profile[col].uniqueCount || 0;
     const maxLabelLength = Math.max(
-      ...profile[col].sampleValues.map((val) => (val || "").length)
+      ...profile[col].sampleValues.map((val) => val.length)
     );
+
     if ((uniqueVals >= 6 && uniqueVals <= 15) || maxLabelLength > 12) {
       chartsToRender.push({
         type: "bar",
         x: likelySalesCol,
         y: col,
         title: `Sales by ${col} (Horizontal)`,
-        horizontal: true,
+        horizontal: true, // custom flag
       });
       break;
     }
   }
 
-  // 4. Pie chart
+  // 4. Pie chart: sales share by top category
   if (categoricalCols.length && numericCols.length) {
     chartsToRender.push({
       type: "pie",
@@ -556,24 +571,24 @@ function selectCharts(profile, data = lastUsedData) {
   return chartsToRender;
 }
 
-function aggregateDataByCategory(data, categoryCol, valueCol) {
-  const aggregation = {};
-
-  data.forEach((row) => {
-    const category = row[categoryCol];
-    const value = parseFloat(row[valueCol]) || 0;
-
-    if (!aggregation[category]) {
-      aggregation[category] = 0;
-    }
-    aggregation[category] += value;
+/* -------------------------
+   Helper: aggregateDataByCategory
+   - Aggregates rows by categoryCol summing valueCol
+   - Returns { labels:[], values:[] } ordered by value desc
+   ------------------------- */
+function aggregateDataByCategory(rows, categoryCol, valueCol) {
+  const agg = {};
+  if (!Array.isArray(rows)) return { labels: [], values: [] };
+  rows.forEach((r) => {
+    const cat =
+      r[categoryCol] !== undefined && r[categoryCol] !== null
+        ? String(r[categoryCol])
+        : "(blank)";
+    const val = parseFloat(String(r[valueCol] || "0").replace(/,/g, "")) || 0;
+    agg[cat] = (agg[cat] || 0) + val;
   });
-
-  // Convert to arrays for Chart.js
-  return {
-    labels: Object.keys(aggregation),
-    values: Object.values(aggregation),
-  };
+  const entries = Object.entries(agg).sort((a, b) => b[1] - a[1]);
+  return { labels: entries.map((e) => e[0]), values: entries.map((e) => e[1]) };
 }
 
 const backgroundColors = [
@@ -624,8 +639,163 @@ function getChartValues(config, data) {
   return [];
 }
 
+// Unified wrapper used by navigation and resize - delegates to the right renderer
 function renderSlideChart(index, onCompleteCallback) {
+  if (!Array.isArray(lastUsedConfigs) || lastUsedConfigs.length === 0) {
+    console.warn("No charts available to render.");
+    return;
+  }
+  if (
+    typeof index !== "number" ||
+    index < 0 ||
+    index >= lastUsedConfigs.length
+  ) {
+    index = 0;
+  }
+
+  const config = lastUsedConfigs[index];
+  if (!config) {
+    console.error("Missing config at index", index, lastUsedConfigs);
+    return;
+  }
+
+  // delegate based on whether this config was pre-aggregated
+  if (config.preaggregated) {
+    // aggregated renderer accepts (index, onCompleteCallback)
+    renderAggregatedSlideChart(index, onCompleteCallback);
+  } else {
+    // simple renderer (index) — keep signature compatible
+    renderSimpleSlideChart(index);
+    if (typeof onCompleteCallback === "function") {
+      // call back after paint
+      requestAnimationFrame(() => onCompleteCallback());
+    }
+  }
+}
+
+let chartInstance = [];
+
+// Replace your previous simple renderer with this exact function:
+function renderSimpleSlideChart(index) {
   console.log("Rendering slide", index, lastUsedConfigs[index]);
+  const config = lastUsedConfigs[index];
+  const canvas = document.getElementById("slide-canvas");
+  const ctx = canvas.getContext("2d");
+
+  // Destroy previous chart if it exists
+  if (currentChartInstance) {
+    console.log("Destroying chart of type:", currentChartInstance.config.type);
+    currentChartInstance.destroy();
+    console.log("Destroyed previous chart instance");
+  }
+
+  // Get labels & values safely
+  let labels = getChartLabels(config, lastUsedData) || [];
+  let values = getChartValues(config, lastUsedData) || [];
+
+  if (!Array.isArray(labels)) labels = Array.from(labels);
+  if (!Array.isArray(values)) {
+    if (values && typeof values === "object") {
+      values = Object.values(values);
+    } else {
+      values = Array.from(values || []);
+    }
+  }
+
+  if (!labels.length || !values.length) {
+    console.warn("No data to render for config:", config);
+    document.getElementById("slide-title").textContent =
+      config.title || `Chart ${index + 1}`;
+    document.getElementById("slide-insights").innerHTML =
+      "<h3>Insights</h3><ul><li>No data available.</li></ul>";
+    document.getElementById("slide-counter").textContent = `${index + 1} / ${
+      lastUsedConfigs.length
+    }`;
+    return;
+  }
+
+  // Ensure numeric conversion of values
+  const numericValues = values.map((v) => {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+      const cleaned = v.replace(/,/g, "").trim();
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? 0 : n;
+    }
+    const n = Number(v);
+    return isNaN(n) ? 0 : n;
+  });
+
+  const chartData = {
+    labels,
+    datasets: [
+      {
+        label: config.y || config.values || config.title,
+        data: numericValues,
+        backgroundColor:
+          config.type === "pie"
+            ? backgroundColors
+            : getColor(currentSlideIndex),
+        borderColor:
+          config.type === "pie"
+            ? borderColors
+            : getColor(currentSlideIndex, true),
+        borderWidth: 1,
+        fill: false,
+      },
+    ],
+  };
+
+  console.log("Creating new chart of type:", config.type);
+
+  // Use horizontal bar if flagged
+  const chartType = config.horizontal ? "bar" : config.type;
+
+  currentChartInstance = new Chart(ctx, {
+    type: chartType,
+    data: chartData,
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      animation: {
+        duration: 800,
+        easing: "easeOutQuart",
+        onComplete: () => {
+          console.log("Chart animation completed");
+        },
+      },
+      indexAxis: config.horizontal ? "y" : "x",
+      scales:
+        chartType === "bar" || chartType === "line"
+          ? {
+              x: { ticks: { autoSkip: true, maxTicksLimit: 20 } },
+              y: config.horizontal
+                ? { ticks: { autoSkip: false } }
+                : { beginAtZero: true },
+            }
+          : {},
+    },
+  });
+
+  // Generate insights
+  const insights = generateInsights(config, lastUsedData);
+  document.getElementById("slide-insights").innerHTML = `
+    <h3>Insights</h3>
+    <ul>${insights.map((item) => `<li>${item}</li>`).join("")}</ul>
+  `;
+
+  // Title & counter
+  document.getElementById("slide-title").textContent =
+    config.title || `Chart ${index + 1}`;
+  document.getElementById("slide-counter").textContent = `${index + 1} / ${
+    lastUsedConfigs.length
+  }`;
+
+  console.log("New chart rendered:", config.title || `Chart ${index + 1}`);
+}
+
+function renderAggregatedSlideChart(index, onCompleteCallback) {
+  console.log("Rendering aggregated slide", index, lastUsedConfigs[index]);
   const config = lastUsedConfigs[index];
   const canvas = document.getElementById("slide-canvas");
   const ctx = canvas.getContext("2d");
@@ -633,10 +803,6 @@ function renderSlideChart(index, onCompleteCallback) {
   // Destroy previous chart
   if (currentChartInstance) {
     try {
-      console.log(
-        "Destroying chart of type:",
-        currentChartInstance.config.type
-      );
       currentChartInstance.destroy();
       console.log("Destroyed previous chart instance");
     } catch (e) {
@@ -644,17 +810,10 @@ function renderSlideChart(index, onCompleteCallback) {
     }
   }
 
-  let labels, values;
+  let labels = config.x || [];
+  let values = config.y || [];
 
-  if (config.preaggregated) {
-    labels = config.x;
-    values = config.y;
-  } else {
-    labels = getChartLabels(config, lastUsedData);
-    values = getChartValues(config, lastUsedData);
-  }
-
-  // Ensure numeric conversion for values
+  // Convert values into clean numbers
   const numericValues = values.map((v) => {
     if (typeof v === "number") return v;
     if (typeof v === "string") {
@@ -665,27 +824,28 @@ function renderSlideChart(index, onCompleteCallback) {
     return Number(v) || 0;
   });
 
-  const chartData = {
-    labels,
-    datasets: [
-      {
-        label: config.y || config.values || config.title,
-        data: numericValues,
-        backgroundColor:
-          config.type === "pie" ? backgroundColors : getColor(index),
-        borderColor:
-          config.type === "pie" ? borderColors : getColor(index, true),
-        borderWidth: 1,
-        fill: false,
-      },
-    ],
+  // Support pie for aggregated
+  const datasetConfig = {
+    label: config.y || config.values || config.title,
+    data: numericValues,
+    backgroundColor: config.type === "pie" ? backgroundColors : getColor(index),
+    borderColor: config.type === "pie" ? borderColors : getColor(index, true),
+    borderWidth: 1,
+    fill: false,
   };
 
-  console.log("Creating new chart of type:", config.type);
+  console.log("Creating aggregated chart of type:", config.type);
+
+  // Scatter removed: default to bar if scatter appears
+  const chartType =
+    config.type === "scatter" ? "bar" : config.horizontal ? "bar" : config.type;
 
   currentChartInstance = new Chart(ctx, {
-    type: config.horizontal ? "bar" : config.type,
-    data: chartData,
+    type: chartType,
+    data: {
+      labels,
+      datasets: [datasetConfig],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: true,
@@ -693,8 +853,6 @@ function renderSlideChart(index, onCompleteCallback) {
         duration: 800,
         easing: "easeOutQuart",
         onComplete: () => {
-          console.log("Chart animation completed");
-          // call onCompleteCallback if provided (used for exporting)
           if (typeof onCompleteCallback === "function") {
             requestAnimationFrame(() => onCompleteCallback());
           }
@@ -702,7 +860,7 @@ function renderSlideChart(index, onCompleteCallback) {
       },
       indexAxis: config.horizontal ? "y" : "x",
       scales:
-        config.type === "bar" || config.type === "line"
+        chartType === "bar" || chartType === "line"
           ? {
               x: { ticks: { autoSkip: true, maxTicksLimit: 20 } },
               y: config.horizontal
@@ -719,21 +877,23 @@ function renderSlideChart(index, onCompleteCallback) {
     },
   });
 
-  // Build insights and UI
+  // Build insights + UI
   const insights = generateInsights(config, lastUsedData);
   document.getElementById("slide-insights").innerHTML = `
     <h3>Insights</h3>
     <ul>${insights.map((item) => `<li>${item}</li>`).join("")}</ul>
   `;
 
-  // Set title & counter
   document.getElementById("slide-title").textContent =
     config.title || `Chart ${index + 1}`;
   document.getElementById("slide-counter").textContent = `${index + 1} / ${
     lastUsedConfigs.length
   }`;
 
-  console.log("New chart rendered:", config.title || `Chart ${index + 1}`);
+  console.log(
+    "Aggregated chart rendered:",
+    config.title || `Chart ${index + 1}`
+  );
 }
 
 // Helper functions
@@ -869,61 +1029,138 @@ function isLikelyPlaceLabel(label) {
   return false;
 }
 
-function formatDateLabel(label, options = {}) {
-  const { defaultMMDD = true } = options;
-  const d = parseDateLabel(label, { defaultMMDD });
-  if (!d) return label;
-  const day = d.getDate();
-  const month = monthName(d.getMonth());
-  return `${getOrdinal(day)} ${month}`;
+/* -------------------------
+   Utility: formatDateLabel (day+suffix + month + year)
+   ------------------------- */
+function formatDateLabel(label) {
+  if (label === undefined || label === null) return String(label);
+  const d = parseDateLabel(label);
+  if (d) {
+    const day = d.getDate();
+    const monthName = d.toLocaleString("en-US", { month: "long" });
+    const year = d.getFullYear();
+    const suffix =
+      day % 10 === 1 && day !== 11
+        ? "st"
+        : day % 10 === 2 && day !== 12
+        ? "nd"
+        : day % 10 === 3 && day !== 13
+        ? "rd"
+        : "th";
+    return `${day}${suffix} ${monthName} ${year}`;
+  }
+  // try Month Year like "Jan 2023" or ISO "2023-01"
+  const s = String(label).trim();
+  const my = s.match(/^([A-Za-z]{3,})\s+(\d{4})$/);
+  if (my) return `${my[1]} ${my[2]}`;
+  const iso = s.match(/^(\d{4})-(\d{2})$/);
+  if (iso) {
+    const year = +iso[1],
+      monthIndex = +iso[2] - 1;
+    return `${new Date(year, monthIndex, 1).toLocaleString("en-US", {
+      month: "short",
+    })} ${year}`;
+  }
+  return s;
 }
 
-function getLabelPreamble(label, options = {}) {
-  const { defaultMMDD = true } = options;
-  if (parseDateLabel(label, { defaultMMDD })) {
-    return "on " + formatDateLabel(label, { defaultMMDD });
+/* -------------------------
+   Grammar: getLabelPreamble
+   - date => "on 9th August 2023" (uses parseDateLabel/formatDateLabel)
+   - month-year (e.g., "Jan 2023" or "2023-01") => "in Jan 2023"
+   - place => "in X"
+   - compass => "in X"
+   - otherwise => "for X"
+   ------------------------- */
+function getLabelPreamble(label) {
+  if (label === undefined || label === null) return "";
+  const s = String(label).trim();
+
+  // exact date
+  if (parseDateLabel(s) !== null) {
+    return "on " + formatDateLabel(s);
   }
-  if (isLikelyPlaceLabel(label)) {
-    return "in " + label;
+
+  // Month Year (like "Jan 2023") or ISO month "YYYY-MM"
+  if (/^[A-Za-z]{3,}\s+\d{4}$/.test(s) || /^\d{4}-\d{2}$/.test(s)) {
+    return "in " + s;
   }
-  // default = product/object/category
-  return "for " + label;
+
+  // Place-like
+  if (isLikelyPlaceLabel(s)) return "in " + s;
+
+  // Compass alone
+  if (/^(north|south|east|west)$/i.test(s)) return "in " + s;
+
+  // fallback => object / product
+  return "for " + s;
 }
 
 function generateInsights(config, data) {
   const insights = [];
-  let labels, values;
 
-  if (config.preaggregated) {
-    labels = config.x;
-    values = config.y;
+  // Resolve labels & values:
+  let labels = [];
+  let values = [];
+
+  if (
+    config &&
+    config.preaggregated &&
+    Array.isArray(config.x) &&
+    Array.isArray(config.y)
+  ) {
+    labels = config.x.slice();
+    values = config.y.slice();
   } else {
-    labels = getChartLabels(config, data);
-    values = getChartValues(config, data);
+    // Prefer custom helpers if they exist
+    if (
+      typeof getChartLabels === "function" &&
+      typeof getChartValues === "function"
+    ) {
+      labels = getChartLabels(config, data) || [];
+      values = getChartValues(config, data) || [];
+    } else {
+      // fallback: if config.x & config.y are column names and data present, aggregate where appropriate
+      if (
+        config &&
+        typeof config.x === "string" &&
+        typeof config.y === "string" &&
+        Array.isArray(data)
+      ) {
+        if (config.type === "pie" || config.type === "bar") {
+          const agg = aggregateDataByCategory(data, config.x, config.y);
+          labels = agg.labels;
+          values = agg.values;
+        } else {
+          // line/scatter: simple map
+          labels = data.map((r) => r[config.x]);
+          values = data.map(
+            (r) => parseFloat(String(r[config.y] || "0").replace(/,/g, "")) || 0
+          );
+        }
+      }
+    }
   }
 
-  if (!labels || !values || !labels.length || !values.length) return insights;
+  if (!labels || !values || labels.length === 0 || values.length === 0)
+    return insights;
 
-  // Helper for outlier detection using IQR method
-  function findOutliers(arr) {
-    const sorted = [...arr].sort((a, b) => a - b);
-    const q1 = sorted[Math.floor(sorted.length / 4)];
-    const q3 = sorted[Math.floor((sorted.length * 3) / 4)];
-    const iqr = q3 - q1;
-    const lowerBound = q1 - 1.5 * iqr;
-    const upperBound = q3 + 1.5 * iqr;
-    return arr
-      .map((v, i) => (v < lowerBound || v > upperBound ? i : -1))
-      .filter((i) => i !== -1);
-  }
+  // ensure numeric values
+  const numericValues = values.map((v) => {
+    if (typeof v === "number") return v;
+    const cleaned = String(v).replace(/,/g, "").trim();
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  });
 
+  // PIE
   if (config.type === "pie") {
-    const total = values.reduce((sum, val) => sum + val, 0);
-    const percentages = values.map((val) => (val / total) * 100);
+    const total = numericValues.reduce((s, v) => s + v, 0);
+    if (total === 0) return insights;
+    const percentages = numericValues.map((v) => (v / total) * 100);
 
-    // Largest contributor
-    const max = Math.max(...values);
-    const maxIndex = values.indexOf(max);
+    const max = Math.max(...numericValues);
+    const maxIndex = numericValues.indexOf(max);
     insights.push(
       `🏆 <strong>${
         labels[maxIndex]
@@ -932,7 +1169,7 @@ function generateInsights(config, data) {
       ].toFixed(1)}%</strong>.`
     );
 
-    // Balance / imbalance
+    // balance
     const dominantThreshold = 30;
     if (percentages[maxIndex] > dominantThreshold) {
       insights.push(
@@ -944,96 +1181,94 @@ function generateInsights(config, data) {
       );
     }
 
-    // Three smallest segments
-    const segmentsWithPct = labels.map((label, i) => ({
-      label,
-      pct: percentages[i],
-    }));
-    segmentsWithPct.sort((a, b) => a.pct - b.pct);
-    const smallestThree = segmentsWithPct.slice(0, 3);
-    const smallestSum = smallestThree.reduce((acc, seg) => acc + seg.pct, 0);
-
+    // three smallest segments conditionally
+    const segs = labels
+      .map((lab, i) => ({ lab, pct: percentages[i] }))
+      .sort((a, b) => a.pct - b.pct);
+    const smallestThree = segs.slice(0, 3);
+    const smallestSum = smallestThree.reduce((s, x) => s + x.pct, 0);
     if (smallestSum < 15) {
-      const segmentNames = smallestThree
-        .map((seg) => `<strong>${seg.label}</strong>`)
-        .join(", ");
       insights.push(
-        `🔍 The three smallest segments (${segmentNames}) together contribute only <strong>${smallestSum.toFixed(
+        `🔍 The three smallest segments (${smallestThree
+          .map((s) => `<strong>${s.lab}</strong>`)
+          .join(", ")}) together contribute only <strong>${smallestSum.toFixed(
           1
         )}%</strong>.`
       );
     }
 
-    // Minor segments (below 5%)
-    const minorSegments = segmentsWithPct.filter((seg) => seg.pct < 5);
-    if (minorSegments.length > 0) {
-      const minorNames = minorSegments
-        .map((seg) => `<strong>${seg.label}</strong>`)
-        .join(", ");
+    const minor = segs.filter((s) => s.pct < 5);
+    if (minor.length > 0) {
       insights.push(
-        `⚠️ There are <strong>${minorSegments.length}</strong> minor segments (${minorNames}) below 5% that might be grouped.`
+        `⚠️ There are <strong>${minor.length}</strong> minor segments (${minor
+          .map((m) => `<strong>${m.lab}</strong>`)
+          .join(", ")}) below 5% that might be grouped.`
       );
     }
 
     return insights;
   }
 
-  // For bar and line charts
-  if (Array.isArray(values)) {
-    const max = Math.max(...values);
-    const min = Math.min(...values);
-    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+  // BAR / LINE
+  const max = Math.max(...numericValues);
+  const min = Math.min(...numericValues);
+  const avg = numericValues.reduce((s, v) => s + v, 0) / numericValues.length;
+  const maxIndex = numericValues.indexOf(max);
+  const minIndex = numericValues.indexOf(min);
 
-    const maxIndex = values.indexOf(max);
-    const minIndex = values.indexOf(min);
+  insights.push(
+    `📈 Sales peaked ${getLabelPreamble(
+      labels[maxIndex]
+    )}, reaching <strong>${max.toFixed(2)}</strong>.`
+  );
+  insights.push(
+    `📉 Sales dipped ${getLabelPreamble(
+      labels[minIndex]
+    )}, down to <strong>${min.toFixed(2)}</strong>.`
+  );
+  insights.push(`📊 Sales averaged about <strong>${avg.toFixed(2)}</strong>.`);
 
-    // Existing peaks and lows
+  // trend detection (simple)
+  let inc = 0,
+    dec = 0;
+  for (let i = 1; i < numericValues.length; i++) {
+    if (numericValues[i] > numericValues[i - 1]) inc++;
+    else if (numericValues[i] < numericValues[i - 1]) dec++;
+  }
+  if (inc === numericValues.length - 1)
+    insights.push("📈 Sales increased steadily over the period.");
+  else if (dec === numericValues.length - 1)
+    insights.push("📉 Sales decreased steadily over the period.");
+  else if (inc > dec)
     insights.push(
-      `📈 Sales peaked ${getLabelPreamble(
-        labels[maxIndex]
-      )}, reaching an all-time high of <strong>${max}</strong>.`
+      "📈 Overall, sales showed an upward trend with some fluctuations."
     );
+  else if (dec > inc)
     insights.push(
-      `📉 Sales had a sharp decline ${getLabelPreamble(
-        labels[minIndex]
-      )}, dropping to <strong>${min}</strong>.`
+      "📉 Overall, sales showed a downward trend with some fluctuations."
     );
+  else
     insights.push(
-      `📊 Sales averaged about <strong>${avg.toFixed(
-        2
-      )}</strong> over the period.`
+      "⚖️ Sales fluctuated throughout the period without a clear trend."
     );
 
-    // Trends & Changes
-    let increasingCount = 0,
-      decreasingCount = 0;
-    for (let i = 1; i < values.length; i++) {
-      if (values[i] > values[i - 1]) increasingCount++;
-      else if (values[i] < values[i - 1]) decreasingCount++;
-    }
-    if (increasingCount === values.length - 1) {
-      insights.push("📈 Sales increased steadily over the period.");
-    } else if (decreasingCount === values.length - 1) {
-      insights.push("📉 Sales decreased steadily over the period.");
-    } else if (increasingCount > decreasingCount) {
+  // outlier detection (IQR)
+  if (numericValues.length >= 4) {
+    const sorted = [...numericValues].sort((a, b) => a - b);
+    const q1 = sorted[Math.floor((sorted.length - 1) / 4)];
+    const q3 = sorted[Math.ceil(((sorted.length - 1) * 3) / 4)];
+    const iqr = q3 - q1;
+    const lo = q1 - 1.5 * iqr;
+    const hi = q3 + 1.5 * iqr;
+    const outIdx = numericValues
+      .map((v, i) => (v < lo || v > hi ? i : -1))
+      .filter((i) => i !== -1);
+    if (outIdx.length) {
       insights.push(
-        "📈 Overall, sales showed an upward trend with some fluctuations."
+        `⚠️ Outliers detected at ${outIdx
+          .map((i) => `<strong>${formatDateLabel(labels[i])}</strong>`)
+          .join(", ")}.`
       );
-    } else if (decreasingCount > increasingCount) {
-      insights.push(
-        "📉 Overall, sales showed a downward trend with some fluctuations."
-      );
-    } else {
-      insights.push(
-        "⚖️ Sales fluctuated throughout the period without a clear trend."
-      );
-    }
-
-    // Outliers detection
-    const outlierIndexes = findOutliers(values);
-    if (outlierIndexes.length) {
-      const outlierLabels = outlierIndexes.map((i) => labels[i]);
-      insights.push(`⚠️ Outliers detected at ${outlierLabels.join(", ")}.`);
     }
   }
 
