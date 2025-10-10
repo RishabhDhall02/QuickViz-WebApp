@@ -152,24 +152,6 @@ document.getElementById("upload-btn").addEventListener("click", function () {
   uploadFile();
 });
 
-function captureChartImage(callback) {
-  requestAnimationFrame(() => {
-    const canvas = document.getElementById("slide-canvas");
-    try {
-      const imgData = canvas.toDataURL("image/png");
-      if (!imgData.startsWith("data:image/png;base64,")) {
-        console.error("Invalid image data format");
-        callback(null);
-        return;
-      }
-      callback(imgData);
-    } catch (err) {
-      console.error("Error capturing chart image:", err);
-      callback(null);
-    }
-  });
-}
-
 /* -------------------------
    Helper: isSalesDataset
    - Accepts dataset (rows array)
@@ -365,8 +347,8 @@ function profileData(data) {
 }
 
 function findLikelyCategoryColumn(categoricalCols) {
-  // Skip anything that looks like an ID
-  const idPatterns = ["id", "code", "number"];
+  // Skip anything that looks like an ID, associate or customer
+  const idPatterns = ["id", "code", "number", "associate", "name"];
   return (
     categoricalCols.find(
       (col) => !idPatterns.some((p) => col.toLowerCase().includes(p))
@@ -461,7 +443,7 @@ function selectChartsAggregated(profile, data) {
     if (agg.labels.length) {
       charts.push({
         type: "bar",
-        title: "Sales by Product Category",
+        title: `Sales by ${categoryCol}`,
         x: agg.labels,
         y: agg.values,
         preaggregated: true,
@@ -489,7 +471,7 @@ function selectChartsAggregated(profile, data) {
     if (profitAgg.labels.length) {
       charts.push({
         type: "bar",
-        title: "Profit by Category",
+        title: `Profit by ${categoryCol || "Category"}`,
         x: profitAgg.labels,
         y: profitAgg.values,
         preaggregated: true,
@@ -720,10 +702,9 @@ function renderSlideChart(index, onCompleteCallback) {
     // aggregated renderer accepts (index, onCompleteCallback)
     renderAggregatedSlideChart(index, onCompleteCallback);
   } else {
-    // simple renderer (index) — keep signature compatible
+    // simple renderer (index)
     renderSimpleSlideChart(index);
     if (typeof onCompleteCallback === "function") {
-      // call back after paint
       requestAnimationFrame(() => onCompleteCallback());
     }
   }
@@ -1129,9 +1110,6 @@ function isLikelyPlaceLabel(label) {
   return false;
 }
 
-/* -------------------------
-   Utility: formatDateLabel (day+suffix + month + year)
-   ------------------------- */
 function formatDateLabel(label) {
   if (label === undefined || label === null) return String(label);
   const d = parseDateLabel(label);
