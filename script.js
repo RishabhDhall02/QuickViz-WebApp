@@ -41,28 +41,41 @@ document.addEventListener("DOMContentLoaded", () => {
   if (dropZone && fileInput) {
     dropZone.addEventListener("dragover", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.add("dragover");
-    });
-
-    dropZone.addEventListener("dragleave", () => {
-      dropZone.classList.remove("dragover");
     });
 
     dropZone.addEventListener("drop", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       dropZone.classList.remove("dragover");
 
       const file = e.dataTransfer.files[0];
-      if (file && file.name.endsWith(".csv")) {
-        fileInput.files = e.dataTransfer.files;
+      if (!file) return;
+
+      if (!file.name.toLowerCase().endsWith(".csv")) {
+        showFileError("Please drop a valid .csv file.");
+        return;
+      }
+
+      // Show loading overlay
+      showLoading();
+
+      setTimeout(() => {
         const reader = new FileReader();
-        reader.onload = (e) => {
-          parseCSV(e.target.result);
+        reader.onload = (ev) => {
+          try {
+            parseCSV(ev.target.result);
+            showSection("part-2");
+          } catch (err) {
+            console.error("Error parsing CSV:", err);
+            alert("There was a problem processing the CSV.");
+          } finally {
+            hideLoading();
+          }
         };
         reader.readAsText(file);
-      } else {
-        showFileError("Please drop a valid .csv file.");
-      }
+      }, 50);
     });
   }
 });
