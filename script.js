@@ -53,12 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
       dropZone.classList.remove("dragover");
 
       const file = e.dataTransfer.files[0];
-      if (
-        file &&
-        (file.name.endsWith(".csv") ||
-          file.name.endsWith(".json") ||
-          file.name.endsWith(".xlsx"))
-      ) {
+      if (file && file.name.endsWith(".csv")) {
         fileInput.files = e.dataTransfer.files;
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -66,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         reader.readAsText(file);
       } else {
-        showFileError("Please drop a valid .csv, .json, or .xlsx file.");
+        showFileError("Please drop a valid .csv file.");
       }
     });
   }
@@ -89,12 +84,12 @@ function uploadFile() {
 
   // Check for supported file formats (CSV, JSON, XLSX)
   const fileExtension = file.name.split(".").pop().toLowerCase();
-  const supportedFormats = ["csv", "json", "xlsx"];
+  const supportedFormats = ["csv"];
 
   if (!supportedFormats.includes(fileExtension)) {
     showErrorMessage(
       errorText2,
-      "Unsupported file format. Please upload a CSV, JSON, or XLSX file.",
+      "Unsupported file format. Please upload a CSV file.",
       errorText1
     );
     return;

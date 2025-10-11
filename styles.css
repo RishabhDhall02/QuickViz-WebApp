@@ -358,23 +358,17 @@ button:focus {
 .hidden {
   display: none;
 }
-#copy-email-msg {
-  margin-left: 10px;
-  color: rgb(0, 90, 128);
-  font-size: 14px;
-  font-weight: bold;
-}
 
 #file-upload-error {
   margin-left: 5px;
-  color: rgb(0, 60, 128);
+  color: #8702d4;
   font-size: 15px;
   font-weight: bold;
 }
 
 #invalid-file-error {
   margin-left: 5px;
-  color: rgb(0, 60, 128);
+  color: #8702d4;
   font-size: 15px;
   font-weight: bold;
 }
@@ -434,7 +428,7 @@ button:focus {
   flex-direction: column;
   z-index: 9999;
   font-family: "Inter", sans-serif;
-  color: #2d6048;
+  color: #8702d4;
   font-weight: 500;
   font-size: 1.1rem;
 }
