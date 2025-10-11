@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.11.0/dist/pptxgen.bundle.js"></script>
-    <link rel="icon" type="image/png" href="./QuickViz_Favicon.png">
+    <link rel="icon" type="image/png" href="./QuickViz_Favicon.png" />
   </head>
   <body>
     <!-- PART ONE: ENTRY PAGE -->
@@ -55,19 +55,8 @@
         <!-- Navigation buttons for sections -->
         <div id="section-nav">
           <button id="to-part-1">← UPLOAD A DIFFERENT FILE</button>
-          <button id="to-part-3">HEAD TO EXPORT →</button>
         </div>
       </main>
-    </section>
-
-    <!-- PART THREE: EXPORT & CUSTOMIZATION -->
-    <section id="part-3" class="app-section" style="display: none">
-      <!-- Placeholder: Future export buttons, color themes, etc. -->
-      <h2>Export The Visualizations!</h2>
-      <div class="export-buttons">
-        <button id="export-pdf">Export as PDF</button>
-        <button id="export-ppt">Export as PPT</button>
-      </div>
     </section>
     <!-- Help Button -->
     <button id="help-btn">NEED HELP?</button>
@@ -79,24 +68,23 @@
         <p>
           <strong>This site is only for sales-related data.</strong> QuickViz
           generates a few visualizations based on the data you upload, along
-          with some key insights such as the peak and decline of sales. You can
-          also export these visualizations and insights as a PDF or a PPT
-          <strong>(Work In Progress)</strong>! </br> </br> To get started, simply
-          drag-and-drop or upload your file and the site will display the
-          visualizations and insights for your data. You can also re-upload or
-          select a different file by going back to the main page. Clicking the
-          "Head to Export" button will take you to the page for downloading the
-          visualizations as a PDF or PPT.
+          with some key insights such as the peak and decline of sales. To get
+          started, simply drag-and-drop or upload your file and the site will
+          display the visualizations and insights for your data. You can also
+          re-upload or select a different file by going back to the main page.
         </p>
         <h2>Contact Me!</h2>
-        <p>You can email me at <strong>rishabhdhall02@gmail.com</strong> for any queries.</p>
+        <p>
+          You can email me at <strong>rishabhdhall02@gmail.com</strong> for any
+          queries.
+        </p>
       </div>
     </div>
     <script src="script.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <p>Analyzing dataset, please wait...</p>
+    </div>
   </body>
 </html>
-
-
-
-

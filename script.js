@@ -1,4 +1,4 @@
-let parsedData = null; // Store parsed data
+let parsedData = null;
 let lastUsedConfigs = [];
 let lastUsedData = [];
 let currentSlideIndex = 0;
@@ -111,16 +111,45 @@ function uploadFile() {
   fileReader.onerror = function (error) {
     alert("Error reading the file. Please try again.");
     console.error("File reading error:", error);
+    hideLoading();
   };
 
   fileReader.onload = function (e) {
     const content = e.target.result;
-    console.log("File content loaded:", content);
-    parseCSV(content);
+    console.log("File content loaded");
+
+    // Show the loading overlay before parsing and chart generation
+    showLoading();
+
+    // Slight delay to allow spinner to render before heavy work starts
+    setTimeout(() => {
+      try {
+        parseCSV(content);
+        // Once done, show the dashboard
+        showSection("part-2");
+      } catch (err) {
+        console.error("Error processing dataset:", err);
+        alert("There was a problem processing the dataset.");
+      } finally {
+        // Always hide loader, even on error
+        hideLoading();
+      }
+    }, 100);
   };
 
   fileReader.readAsText(file);
-  showSection("part-2");
+  showLoading();
+
+  setTimeout(() => {
+    parseCSV(content)
+      .then((parsedData) => {
+        generateCharts(parsedData);
+        showSection("part-2");
+      })
+      .finally(() => {
+        hideLoading();
+      });
+  }, 100); // small delay helps the browser render the spinner
 }
 
 document.getElementById("file-input").addEventListener("change", function () {
@@ -346,14 +375,54 @@ function profileData(data) {
   return profile;
 }
 
-function findLikelyCategoryColumn(categoricalCols) {
-  // Skip anything that looks like an ID, associate or customer
-  const idPatterns = ["id", "code", "number", "associate", "name"];
-  return (
-    categoricalCols.find(
-      (col) => !idPatterns.some((p) => col.toLowerCase().includes(p))
-    ) || categoricalCols[0]
-  );
+function findLikelyCategoryColumns(categoricalCols) {
+  const lowerCols = categoricalCols.map((c) => c.toLowerCase());
+
+  const productPatterns = ["product", "item", "category", "type"];
+  const customerPatterns = ["customer", "segment", "group", "class"];
+  const regionPatterns = ["region", "territory", "area", "zone"];
+
+  const negativePatterns = [
+    "id",
+    "code",
+    "number",
+    "name",
+    "associate",
+    "postal",
+    "zip",
+  ];
+
+  // Helper to check if a column matches
+  const matches = (col, include, exclude) =>
+    include.some((p) => col.includes(p)) &&
+    !exclude.some((n) => col.includes(n));
+
+  let productCol = null;
+  let segmentCol = null;
+  let regionCol = null;
+
+  for (const col of categoricalCols) {
+    const lower = col.toLowerCase();
+
+    if (!productCol && matches(lower, productPatterns, negativePatterns))
+      productCol = col;
+
+    if (!segmentCol && matches(lower, customerPatterns, negativePatterns))
+      segmentCol = col;
+
+    if (!regionCol && matches(lower, regionPatterns, negativePatterns))
+      regionCol = col;
+  }
+
+  // fallback if not found
+  if (!productCol) {
+    productCol =
+      categoricalCols.find(
+        (c) => !negativePatterns.some((n) => c.toLowerCase().includes(n))
+      ) || categoricalCols[0];
+  }
+
+  return [productCol, segmentCol, regionCol];
 }
 
 function findLikelySalesColumn(numericCols) {
@@ -385,102 +454,6 @@ function findLikelyDateColumn(data) {
     if (key.toLowerCase().includes("date")) return key;
   }
   return null;
-}
-
-function selectChartsAggregated(profile, data) {
-  const charts = [];
-  if (!Array.isArray(data) || data.length === 0) return charts;
-
-  // compute useful cols correctly from profile
-  const numericCols = Object.keys(profile).filter(
-    (k) => profile[k].type === "numeric"
-  );
-  const categoricalCols = Object.keys(profile).filter((k) =>
-    ["categorical", "text"].includes(profile[k].type)
-  );
-
-  const dateCol = findLikelyDateColumn(data);
-  const salesCol = findLikelySalesColumn(numericCols || []);
-  const categoryCol = findLikelyCategoryColumn(categoricalCols || []);
-
-  // 1) Sales over time (grouped by Month-Year)
-  if (dateCol && salesCol) {
-    const monthMap = {}; // YYYY-MM -> { label: 'Jan 2023', total }
-    data.forEach((r) => {
-      const d = parseDateLabel(r[dateCol]);
-      if (!d) return;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        "0"
-      )}`;
-      const label = `${d.toLocaleString("default", {
-        month: "short",
-      })} ${d.getFullYear()}`;
-      const val = parseFloat(String(r[salesCol] || "0").replace(/,/g, "")) || 0;
-      if (!monthMap[key]) monthMap[key] = { label, total: 0, dateObj: d };
-      monthMap[key].total += val;
-    });
-
-    const keys = Object.keys(monthMap).sort(); // chronological
-    const labels = keys.map((k) => monthMap[k].label);
-    const values = keys.map((k) => monthMap[k].total);
-
-    if (labels.length > 0) {
-      charts.push({
-        type: "line",
-        title: "Sales Over Time (Monthly)",
-        x: labels,
-        y: values,
-        preaggregated: true,
-        insight: "Sales trend across months/years",
-      });
-    }
-  }
-
-  // 2) Sales by product/category (pre-aggregate)
-  if (categoryCol && salesCol) {
-    const agg = aggregateDataByCategory(data, categoryCol, salesCol);
-    if (agg.labels.length) {
-      charts.push({
-        type: "bar",
-        title: `Sales by ${categoryCol}`,
-        x: agg.labels,
-        y: agg.values,
-        preaggregated: true,
-        insight: "Category-wise contribution to overall sales",
-      });
-
-      // Push a pie for distribution (preaggregated)
-      charts.push({
-        type: "pie",
-        title: `Sales Distribution by ${categoryCol}`,
-        x: agg.labels,
-        y: agg.values,
-        preaggregated: true,
-      });
-    }
-  }
-
-  // 3) optional: profit vs sales (if Profit numeric)
-  if (salesCol && numericCols.includes("Profit")) {
-    const profitAgg = aggregateDataByCategory(
-      data,
-      categoryCol || "Category",
-      "Profit"
-    );
-    if (profitAgg.labels.length) {
-      charts.push({
-        type: "bar",
-        title: `Profit by ${categoryCol || "Category"}`,
-        x: profitAgg.labels,
-        y: profitAgg.values,
-        preaggregated: true,
-        insight: "Profit contribution by category",
-      });
-    }
-  }
-
-  return charts;
 }
 
 function selectChartsSimple(profile, data) {
@@ -515,57 +488,44 @@ function selectChartsSimple(profile, data) {
     });
   }
 
-  // 2. Bar chart: sales by category (e.g., by region/product)
+  // 2. Bar chart: sales by category (e.g., by product)
   if (categoricalCols.length && numericCols.length) {
-    const cat = findLikelyCategoryColumn(categoricalCols);
+    const [productCol, segmentCol, regionCol] =
+      findLikelyCategoryColumns(categoricalCols);
     chartsToRender.push({
       type: "bar",
-      x: cat,
+      x: productCol,
       y: likelySalesCol,
-      title: `Sales by ${cat}`,
+      title: `Sales by ${productCol}`,
     });
   }
 
-  // 3. Horizontal Bar chart for long label columns
-  for (const col of categoricalCols) {
-    const uniqueVals = profile[col].uniqueCount || 0;
-    const maxLabelLength = Math.max(
-      ...profile[col].sampleValues.map((val) => (val || "").length)
-    );
-
-    if ((uniqueVals >= 6 && uniqueVals <= 15) || maxLabelLength > 12) {
-      chartsToRender.push({
-        type: "bar",
-        x: likelySalesCol,
-        y: col,
-        title: `Sales by ${col} (Horizontal)`,
-        horizontal: true,
-      });
-      break;
-    }
-  }
-
-  // 4. Pie chart: sales share by top category
+  // 3. Pie chart: sales share by top category
   if (categoricalCols.length && numericCols.length) {
-    const cat = findLikelyCategoryColumn(categoricalCols);
-    chartsToRender.push({
-      type: "pie",
-      labels: cat,
-      values: likelySalesCol,
-      title: `Sales Distribution by ${cat}`,
-    });
+    const [productCol, segmentCol, regionCol] =
+      findLikelyCategoryColumns(categoricalCols);
+    if (segmentCol == null) {
+      chartsToRender.push({
+        type: "pie",
+        labels: regionCol,
+        values: likelySalesCol,
+        title: `Sales Distribution by ${regionCol}`,
+      });
+    } else {
+      chartsToRender.push({
+        type: "pie",
+        labels: segmentCol,
+        values: likelySalesCol,
+        title: `Sales Distribution by ${segmentCol}`,
+      });
+    }
   }
 
   // final safety: if nothing added, return empty and let fallback handle it
   console.log("Charts to render (simple):", chartsToRender);
   return chartsToRender;
 }
-
-/* -------------------------
-   Helper: aggregateDataByCategory
-   - Aggregates rows by categoryCol summing valueCol
-   - Returns { labels:[], values:[] } ordered by value desc
-   ------------------------- */
+// Aggregates rows by categoryCol summing valueCol
 function aggregateDataByCategory(rows, categoryCol, valueCol) {
   const agg = {};
   if (!Array.isArray(rows)) return { labels: [], values: [] };
@@ -579,6 +539,104 @@ function aggregateDataByCategory(rows, categoryCol, valueCol) {
   });
   const entries = Object.entries(agg).sort((a, b) => b[1] - a[1]);
   return { labels: entries.map((e) => e[0]), values: entries.map((e) => e[1]) };
+}
+
+function selectChartsAggregated(profile, data) {
+  const charts = [];
+  if (!Array.isArray(data) || data.length === 0) return charts;
+
+  // compute useful cols correctly from profile
+  const numericCols = Object.keys(profile).filter(
+    (k) => profile[k].type === "numeric"
+  );
+  const categoricalCols = Object.keys(profile).filter((k) =>
+    ["categorical", "text"].includes(profile[k].type)
+  );
+
+  const dateCol = findLikelyDateColumn(data);
+  const salesCol = findLikelySalesColumn(numericCols || []);
+  const [productCol, segmentCol, regionCol] = findLikelyCategoryColumns(
+    categoricalCols || []
+  );
+
+  // 1) Sales over Time -> Line
+  if (dateCol && salesCol) {
+    const monthMap = {}; // YYYY-MM -> { label: 'Jan 2023', total }
+    data.forEach((r) => {
+      const d = parseDateLabel(r[dateCol]);
+      if (!d) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}`;
+      const label = `${d.toLocaleString("default", {
+        month: "short",
+      })} ${d.getFullYear()}`;
+      const val = parseFloat(String(r[salesCol] || "0").replace(/,/g, "")) || 0;
+      if (!monthMap[key]) monthMap[key] = { label, total: 0, dateObj: d };
+      monthMap[key].total += val;
+    });
+
+    const keys = Object.keys(monthMap).sort(); // chronological
+    const labels = keys.map((k) => monthMap[k].label);
+    const values = keys.map((k) => monthMap[k].total);
+
+    if (labels.length > 0) {
+      charts.push({
+        type: "line",
+        title: "Sales Over Time (Monthly)",
+        x: labels,
+        y: values,
+        preaggregated: true,
+        insight: "Sales trend across months/years",
+      });
+    }
+  }
+
+  // 2) Sales by Product -> Bar
+  if (productCol && salesCol) {
+    const agg = aggregateDataByCategory(data, productCol, salesCol);
+    if (agg.labels.length) {
+      charts.push({
+        type: "bar",
+        title: `Sales by ${productCol}`,
+        x: agg.labels,
+        y: agg.values,
+        preaggregated: true,
+        insight: "Category-wise contribution to overall sales",
+      });
+    }
+  }
+
+  // 3) Sales by Customer Segment -> Pie
+  if (segmentCol && salesCol) {
+    const agg = aggregateDataByCategory(data, segmentCol, salesCol);
+    if (agg.labels.length) {
+      charts.push({
+        type: "pie",
+        title: `Sales Distribution by ${segmentCol}`,
+        x: agg.labels,
+        y: agg.values,
+        preaggregated: true,
+      });
+    }
+  }
+
+  // 4) Sales by Region -> Pie
+  if (regionCol && salesCol) {
+    const agg = aggregateDataByCategory(data, regionCol, salesCol);
+    if (agg.labels.length) {
+      charts.push({
+        type: "pie",
+        title: `Sales Distribution by ${regionCol}`,
+        x: agg.labels,
+        y: agg.values,
+        preaggregated: true,
+      });
+    }
+  }
+
+  return charts;
 }
 
 const backgroundColors = [
@@ -701,9 +759,11 @@ function renderSlideChart(index, onCompleteCallback) {
   if (config.preaggregated) {
     // aggregated renderer accepts (index, onCompleteCallback)
     renderAggregatedSlideChart(index, onCompleteCallback);
+    console.log("Rendering aggregated chart...");
   } else {
     // simple renderer (index)
     renderSimpleSlideChart(index);
+    console.log("Rendering simple chart...");
     if (typeof onCompleteCallback === "function") {
       requestAnimationFrame(() => onCompleteCallback());
     }
@@ -946,7 +1006,7 @@ function renderAggregatedSlideChart(index, onCompleteCallback) {
           : {},
       plugins: {
         legend: {
-          display: true,
+          display: chartType !== "bar",
           position: config.type === "pie" ? "right" : "top",
         },
       },
@@ -1390,3 +1450,13 @@ window.addEventListener("resize", () => {
     renderSlideChart(currentSlideIndex);
   }
 });
+
+function showLoading() {
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) overlay.style.display = "flex";
+}
+
+function hideLoading() {
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) overlay.style.display = "none";
+}
