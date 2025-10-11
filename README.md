@@ -1,4 +1,4 @@
-# QuickViz - WebApp (Ongoing)
+# QuickViz - WebApp
 
 QuickViz is a lightweight data visualization tool that enables users to drag and drop or upload CSV sales-related datasets and automatically generates interactive charts with insights.
 
@@ -29,7 +29,6 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
   - Three-part layout:  
     1. Upload interface  
     2. Interactive chart slideshow with navigation  
-    3. Export panel (currently being worked on)
 
 ---
 
@@ -44,17 +43,14 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
 
 ## Future Plans
 
-- **Improved CSV Data Handling and Parsing**
-- **Further UI Enhancements**
-- **Adding a loading screen for larger datasets**
+- **Further UI Enhancements (if necessary)**
 
 ---
 
 ## Technologies Used
 
 - HTML, CSS, JavaScript for frontend
-- Libraries: Chart.js, PapaParse (for CSV parsing), xlsx (for Excel parsing)
-
+- Libraries: Chart.js, PapaParse (for CSV parsing)
 ---
 
 ## License
