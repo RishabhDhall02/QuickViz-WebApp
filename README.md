@@ -9,8 +9,8 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
 - **Automated Chart Generation**  
   Creates multiple visualizations based on the data:
   - **Line chart**: Monthly aggregated "Sales Over Time"
-  - **Bar chart**: Sales by top-level category (e.g., Product Category, Region)
-  - **Pie chart**: Distribution of sales across top categories
+  - **Bar chart**: Sales by top-level category (e.g., Product Category)
+  - **Pie chart**: Distribution of sales across top categories (e.g., Customer Segment, Region)
 
 - **Dynamic Data Profiling**
   - Auto-detects column types: date, numeric, categorical, or text
@@ -26,7 +26,7 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
     - Pie-chart specifics: dominant segments, minor groups, balance
 
 - **Responsive UI**
-  - Three-part layout:  
+  - Two-part layout:  
     1. Upload interface  
     2. Interactive chart slideshow with navigation  
 
