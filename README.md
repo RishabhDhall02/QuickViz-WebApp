@@ -50,7 +50,7 @@ QuickViz is a lightweight data visualization tool that enables users to drag and
 ## Technologies Used
 
 - HTML, CSS, JavaScript for frontend
-- Libraries: Chart.js, PapaParse (for CSV parsing)
+- Libraries: Chart.js, PapaParse
 ---
 
 ## License
